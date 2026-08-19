@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Lock, ArrowLeft, X, ShieldCheck, 
+  ArrowLeft, X, ShieldCheck, 
   QrCode, Sparkles, RefreshCw, Zap, AlertCircle, Clock, CheckCircle2
 } from 'lucide-react';
-import { CyberModule } from '../types';
+import { CyberModule, UserProfile, AdminRuntimePlan } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
+import { apiClient } from '../services/apiClient';
 
-interface RuntimePlan {
+interface RuntimePlanItem {
   id: string;
   name: string;
   price: string;
@@ -16,7 +17,7 @@ interface RuntimePlan {
   isPopular?: boolean;
 }
 
-const RUNTIME_PLANS: RuntimePlan[] = [
+const DEFAULT_RUNTIME_PLANS: RuntimePlanItem[] = [
   {
     id: 'plan-15',
     name: '15 DAYS RUNTIME',
@@ -48,25 +49,51 @@ const RUNTIME_PLANS: RuntimePlan[] = [
   },
 ];
 
-const PAYMENT_QR_IMAGE_URL = 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg';
+const DEFAULT_QR_IMAGE = 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg';
 const INITIAL_TIMER_SECONDS = 300; // 5 minutes
 
 interface PremiumPaymentModalProps {
   module: CyberModule | null;
   isOpen: boolean;
   onClose: () => void;
+  user?: UserProfile | null;
+  plans?: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[];
+  upiQrImage?: string;
 }
 
 export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
   module,
   isOpen,
   onClose,
+  user,
+  plans,
+  upiQrImage,
 }) => {
-  const [selectedPlan, setSelectedPlan] = useState<RuntimePlan>(RUNTIME_PLANS[2]);
+  // Map dynamic plans if provided
+  const availablePlans: RuntimePlanItem[] = (plans && plans.length > 0)
+    ? plans.map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: `₹${p.userPrice ?? p.defaultPrice}`,
+        numericPrice: p.userPrice ?? p.defaultPrice,
+        badge: p.badge,
+        isPopular: p.isPopular,
+      }))
+    : DEFAULT_RUNTIME_PLANS;
+
+  const [selectedPlan, setSelectedPlan] = useState<RuntimePlanItem>(availablePlans[2] || availablePlans[0]);
   const [checkoutStep, setCheckoutStep] = useState<'plans' | 'method' | 'qr_payment'>('plans');
   const [timeLeft, setTimeLeft] = useState<number>(INITIAL_TIMER_SECONDS);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [serverQrImage, setServerQrImage] = useState<string>(upiQrImage || DEFAULT_QR_IMAGE);
+
+  useEffect(() => {
+    if (availablePlans.length > 0) {
+      setSelectedPlan(availablePlans[2] || availablePlans[0]);
+    }
+  }, [plans]);
 
   // Real-time 5:00 countdown timer for active QR payment session
   useEffect(() => {
@@ -87,19 +114,33 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
     setTimeLeft(INITIAL_TIMER_SECONDS);
     setIsVerifying(false);
     setVerificationStatus(null);
+    setActiveOrderId(null);
     onClose();
   };
 
-  const handleSelectAndPay = (plan: RuntimePlan) => {
+  const handleSelectAndPay = (plan: RuntimePlanItem) => {
     cyberAudio.playClick(1300);
     setSelectedPlan(plan);
     setCheckoutStep('method');
   };
 
-  const handleProceedToQR = () => {
+  const handleProceedToQR = async () => {
     cyberAudio.playClick(1400);
     setTimeLeft(INITIAL_TIMER_SECONDS);
     setVerificationStatus(null);
+
+    // Call real backend API to create order
+    try {
+      const currentUserId = user?.id || user?.username || 'USER_10025';
+      const orderRes = await apiClient.createOrder(currentUserId, module.id, selectedPlan.id);
+      setActiveOrderId(orderRes.order.id);
+      if (orderRes.upiQrImageUrl) {
+        setServerQrImage(orderRes.upiQrImageUrl);
+      }
+    } catch (err: any) {
+      console.warn('Backend order creation warning:', err);
+    }
+
     setCheckoutStep('qr_payment');
   };
 
@@ -109,16 +150,28 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
     setVerificationStatus(null);
   };
 
-  const handleCheckPaymentStatus = () => {
+  const handleCheckPaymentStatus = async () => {
     cyberAudio.playScan();
     setIsVerifying(true);
     setVerificationStatus(null);
 
-    // Ready for backend verification integration
+    try {
+      if (activeOrderId) {
+        const ord = await apiClient.getOrder(activeOrderId);
+        if (ord.paymentStatus === 'PAID') {
+          setVerificationStatus('PAYMENT CONFIRMED! Runtime license successfully provisioned and unlocked.');
+          setIsVerifying(false);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     setTimeout(() => {
       setIsVerifying(false);
-      setVerificationStatus('Awaiting gateway network confirmation. Please complete the transfer on your UPI app.');
-    }, 1500);
+      setVerificationStatus('Awaiting gateway settlement confirmation. Please complete the transfer on your UPI application.');
+    }, 1200);
   };
 
   // Format MM:SS
@@ -203,7 +256,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
 
               {/* 4 Runtime Plans List */}
               <div className="space-y-2.5 pt-1">
-                {RUNTIME_PLANS.map((plan) => {
+                {availablePlans.map((plan) => {
                   const isSelected = selectedPlan.id === plan.id;
 
                   return (
@@ -444,6 +497,9 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                 <div>
                   <span className="text-[10px] font-mono-code text-slate-400 block">{module.name}</span>
                   <span className="text-xs font-display font-bold text-white">{selectedPlan.name}</span>
+                  {activeOrderId && (
+                    <span className="text-[9px] font-mono-code text-slate-500 block">ORDER: {activeOrderId}</span>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className="font-display font-extrabold text-xl text-cyan-300">{selectedPlan.price}</span>
@@ -460,7 +516,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                 }`}>
                   <div className="relative rounded-xl overflow-hidden bg-white p-2 flex items-center justify-center">
                     <img
-                      src={PAYMENT_QR_IMAGE_URL}
+                      src={serverQrImage || DEFAULT_QR_IMAGE}
                       alt="UPI Payment QR Code"
                       referrerPolicy="no-referrer"
                       className="w-full h-auto max-h-[240px] sm:max-h-[260px] object-contain rounded-lg"

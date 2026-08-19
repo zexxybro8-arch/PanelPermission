@@ -1,78 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   ArrowLeft, Terminal, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
-  Flame, ChevronRight
+  Flame, ChevronRight, ShieldCheck, LayoutDashboard
 } from 'lucide-react';
-import { UserProfile, CyberModule } from '../types';
+import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
 import { PremiumPaymentModal } from './PremiumPaymentModal';
+import { apiClient } from '../services/apiClient';
 
 interface CyberDashboardProps {
   user: UserProfile;
   onLogout: () => void;
   onOpenTerminal: () => void;
+  onOpenAdmin?: () => void;
 }
-
-const INITIAL_MODULES: CyberModule[] = [
-  {
-    id: 'angry-mod',
-    name: 'ANGRY MOD',
-    description: 'Advanced telemetry instrumentation & sandboxed runtime virtualization environment.',
-    tag: 'V2.4 KERNEL',
-    version: '2.4.0',
-    enabled: false,
-  },
-  {
-    id: 'bala-mod-xyz',
-    name: 'BALA MOD XYZ',
-    description: 'Next-generation high-frequency vector accelerator & dynamic memory runtime interceptor.',
-    tag: 'XYZ MATRIX',
-    version: '5.2.0',
-    enabled: false,
-  },
-  {
-    id: 'gk-panel',
-    name: 'GK PANEL',
-    description: 'Kernel dispatch inspector and real-time buffer telemetry monitor.',
-    tag: 'SYS OVERLAY',
-    version: '1.8.2',
-    enabled: false,
-  },
-  {
-    id: 'rapid-core',
-    name: 'RAPID CORE',
-    description: 'High-frequency thread scheduler and ultra-low latency packet optimizer.',
-    tag: 'LATENCY ENGINE',
-    version: '3.1.0',
-    enabled: false,
-  },
-  {
-    id: 'dripclint',
-    name: 'DRIPCLINT',
-    description: 'UI stream layout interceptor and dynamic HUD render layer synchronization.',
-    tag: 'STREAM SYNC',
-    version: '1.2.9',
-    enabled: false,
-  },
-  {
-    id: 'xyz-cheats',
-    name: 'XYZ CHEATS',
-    description: 'Algorithmic 3D coordinate vector math solver and memory diagnostic analyzer.',
-    tag: 'VECTOR MATH',
-    version: '4.0.1',
-    enabled: false,
-  },
-  {
-    id: 'silent-cheats',
-    name: 'SILENT CHEATS',
-    description: 'Stealth process sandbox auditor and zero-footprint memory trace wiper.',
-    tag: 'ZERO TRACE',
-    version: '2.0.4',
-    enabled: false,
-  },
-];
 
 const MODULE_ICONS: Record<string, React.ElementType> = {
   'angry-mod': Zap,
@@ -88,12 +31,36 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   user,
   onLogout,
   onOpenTerminal,
+  onOpenAdmin,
 }) => {
-  const [modules, setModules] = useState<CyberModule[]>(INITIAL_MODULES);
+  const [modules, setModules] = useState<CyberModule[]>([]);
+  const [plans, setPlans] = useState<(AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[]>([]);
+  const [userLicenses, setUserLicenses] = useState<AdminLicense[]>([]);
+  const [upiQrImage, setUpiQrImage] = useState<string>('');
   const [activePaywallModule, setActivePaywallModule] = useState<CyberModule | null>(null);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Trigger Paywall whenever an ON/OFF toggle is clicked
+  // Load live portal catalogue and personalized pricing from backend
+  const loadPortalConfig = async () => {
+    try {
+      const config = await apiClient.getPortalConfig(user.id || user.username);
+      setModules(config.modules);
+      setPlans(config.plans);
+      setUserLicenses(config.userLicenses || []);
+      if (config.upiQrImage) setUpiQrImage(config.upiQrImage);
+    } catch (err) {
+      console.warn('Failed to load live portal config, using default modules:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPortalConfig();
+  }, [user]);
+
+  // Trigger Paywall whenever an ON/OFF toggle or REQUEST ACCESS is clicked
   const handleToggleModule = (module: CyberModule) => {
     cyberAudio.playScan();
     setActivePaywallModule(module);
@@ -103,7 +70,10 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const handleClosePaywall = () => {
     setIsPaywallOpen(false);
     setActivePaywallModule(null);
+    loadPortalConfig();
   };
+
+  const isAdmin = user.role === 'admin' || user.clearanceLevel >= 5 || user.username === 'ADMINXD';
 
   return (
     <motion.div
@@ -155,7 +125,21 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         </div>
 
         {/* Top Action Buttons */}
-        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
+          {isAdmin && onOpenAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                cyberAudio.playClick(1400);
+                onOpenAdmin();
+              }}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 text-slate-950 font-display font-extrabold text-xs tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(0,242,254,0.3)] hover:scale-[1.02] transition-transform cursor-pointer"
+            >
+              <LayoutDashboard className="w-4 h-4 text-slate-950" />
+              <span>ADMIN PANEL</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -182,10 +166,11 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         </div>
       </div>
 
-      {/* Grid of 6 Cyber Modules */}
+      {/* Grid of Cyber Modules */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
         {modules.map((mod, index) => {
           const IconComponent = MODULE_ICONS[mod.id] || Zap;
+          const hasLicense = userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
 
           return (
             <motion.div
@@ -223,20 +208,26 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
 
                   {/* Animated ON/OFF Toggle */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[11px] font-mono-code font-bold text-slate-500 select-none">
-                      OFF
+                    <span className={`text-[11px] font-mono-code font-bold select-none ${hasLicense ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      {hasLicense ? 'ON' : 'OFF'}
                     </span>
 
                     <button
                       type="button"
                       onClick={() => handleToggleModule(mod)}
-                      className="w-12 h-6 rounded-full bg-slate-900 border border-slate-700 hover:border-cyan-400/60 p-0.5 transition-all duration-300 relative cursor-pointer group/toggle focus:outline-none focus:ring-1 focus:ring-cyan-400/50"
-                      title={`Request access for ${mod.name}`}
+                      className={`w-12 h-6 rounded-full border p-0.5 transition-all duration-300 relative cursor-pointer focus:outline-none ${
+                        hasLicense
+                          ? 'bg-emerald-950/80 border-emerald-500/60'
+                          : 'bg-slate-900 border-slate-700 hover:border-cyan-400/60'
+                      }`}
+                      title={hasLicense ? `Active license on ${mod.name}` : `Request access for ${mod.name}`}
                     >
-                      {/* Toggle Knob (Default OFF) */}
+                      {/* Toggle Knob */}
                       <motion.div
-                        className="w-4.5 h-4.5 rounded-full bg-slate-400 group-hover/toggle:bg-cyan-300 shadow-md flex items-center justify-center"
-                        animate={{ x: mod.enabled ? 24 : 0 }}
+                        className={`w-4.5 h-4.5 rounded-full shadow-md flex items-center justify-center ${
+                          hasLicense ? 'bg-emerald-400' : 'bg-slate-400 group-hover/toggle:bg-cyan-300'
+                        }`}
+                        animate={{ x: hasLicense ? 24 : 0 }}
                         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                       >
                         <Lock className="w-2.5 h-2.5 text-slate-900" />
@@ -253,17 +244,24 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
 
               {/* Bottom Card Footer: Request Button / State */}
               <div className="pt-4 mt-3 border-t border-slate-900/90 flex items-center justify-between text-[11px] font-mono-code">
-                <span className="text-slate-500 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
-                  REQUIRES ACCESS PASS
-                </span>
+                {hasLicense ? (
+                  <span className="text-emerald-400 flex items-center gap-1.5 font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    AUTHORIZED RUNTIME ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+                    REQUIRES ACCESS PASS
+                  </span>
+                )}
 
                 <button
                   type="button"
                   onClick={() => handleToggleModule(mod)}
                   className="text-cyan-400 hover:text-cyan-200 hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <span>REQUEST ACCESS</span>
+                  <span>{hasLicense ? 'MANAGE RUNTIME' : 'REQUEST ACCESS'}</span>
                   <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
@@ -277,6 +275,9 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         module={activePaywallModule}
         isOpen={isPaywallOpen}
         onClose={handleClosePaywall}
+        user={user}
+        plans={plans}
+        upiQrImage={upiQrImage}
       />
     </motion.div>
   );

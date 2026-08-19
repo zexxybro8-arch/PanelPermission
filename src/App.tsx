@@ -4,8 +4,10 @@ import { CyberHeader } from './components/CyberHeader';
 import { CyberLoginCard } from './components/CyberLoginCard';
 import { CyberDashboard } from './components/CyberDashboard';
 import { SecurityTerminalModal } from './components/SecurityTerminalModal';
+import { AdminPortal } from './components/admin/AdminPortal';
 import { UserProfile, ServerNode, TelemetryLog } from './types';
 import { cyberAudio } from './utils/cyberAudio';
+import { ShieldAlert, ShieldCheck } from 'lucide-react';
 
 const AVAILABLE_NODES: ServerNode[] = [
   { id: 'sg-01', name: 'SG-01 (Singapore)', region: 'Asia-SE', latencyMs: 12, status: 'optimal', encryption: 'KYBER-1024' },
@@ -26,12 +28,79 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [selectedNode, setSelectedNode] = useState<ServerNode>(AVAILABLE_NODES[0]);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [currentView, setCurrentView] = useState<'portal' | 'admin'>(() => {
+    return window.location.pathname.startsWith('/admin') || window.location.hash === '#admin' ? 'admin' : 'portal';
+  });
 
   // Modals state
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
 
   // Live telemetry stream
   const [logs, setLogs] = useState<TelemetryLog[]>(INITIAL_LOGS);
+
+  // Sync URL state and handle popstate (browser back/forward navigation)
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.pathname.startsWith('/admin') || window.location.hash === '#admin') {
+        setCurrentView('admin');
+      } else {
+        setCurrentView('portal');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateToAdmin = () => {
+    if (window.location.pathname !== '/admin') {
+      window.history.pushState({}, '', '/admin');
+    }
+    setCurrentView('admin');
+  };
+
+  const navigateToPortal = () => {
+    if (window.location.pathname !== '/') {
+      window.history.pushState({}, '', '/');
+    }
+    setCurrentView('portal');
+  };
+
+  // Restore authenticated session securely on initial load
+  useEffect(() => {
+    try {
+      const storedSession = localStorage.getItem('aegis_auth_session');
+      if (storedSession) {
+        const parsed = JSON.parse(storedSession);
+        // Validate token integrity and expiration timestamp
+        if (
+          parsed &&
+          parsed.token &&
+          parsed.expiresAt &&
+          parsed.expiresAt > Date.now()
+        ) {
+          const restoredUser: UserProfile = {
+            id: parsed.id || 'USER_10024',
+            username: parsed.username,
+            codename: `${parsed.username}_OPERATOR`,
+            clearanceLevel: parsed.clearanceLevel || 3,
+            role: parsed.role || (parsed.username === 'ADMINXD' ? 'admin' : 'user'),
+            terminalId: parsed.terminalId || `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
+            ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
+            nodeRegion: parsed.nodeRegion || AVAILABLE_NODES[0].region,
+            avatarSeed: parsed.username,
+            sessionToken: parsed.token,
+            loginTime: new Date(parsed.createdAt || Date.now()).toISOString(),
+          };
+          setUser(restoredUser);
+        } else {
+          localStorage.removeItem('aegis_auth_session');
+        }
+      }
+    } catch {
+      localStorage.removeItem('aegis_auth_session');
+    }
+  }, []);
 
   // Periodic Telemetry Simulator
   useEffect(() => {
@@ -78,15 +147,48 @@ export default function App() {
 
   const handleLoginSuccess = (authenticatedUser: UserProfile) => {
     setUser(authenticatedUser);
+    // Securely persist authenticated session descriptor on the device
+    try {
+      const sessionData = {
+        id: authenticatedUser.id || 'USER_10024',
+        username: authenticatedUser.username,
+        role: authenticatedUser.role,
+        token: authenticatedUser.sessionToken,
+        clearanceLevel: authenticatedUser.clearanceLevel,
+        nodeRegion: authenticatedUser.nodeRegion,
+        terminalId: authenticatedUser.terminalId,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days expiration window
+      };
+      localStorage.setItem('aegis_auth_session', JSON.stringify(sessionData));
+    } catch {
+      // ignore storage quota errors
+    }
   };
 
   const handleLogout = () => {
+    // Clear remembered session on logout
+    try {
+      localStorage.removeItem('aegis_auth_session');
+      localStorage.removeItem('aegis_auth_token');
+    } catch {
+      // ignore
+    }
     setUser(null);
   };
 
   const handleClearLogs = () => {
     setLogs([]);
   };
+
+  // If viewing Admin Panel route: /admin
+  if (currentView === 'admin') {
+    return (
+      <AdminPortal
+        onBackToPortal={navigateToPortal}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#06080d] text-slate-100 relative flex flex-col justify-between overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
@@ -103,6 +205,7 @@ export default function App() {
           availableNodes={AVAILABLE_NODES}
           isAudioMuted={isAudioMuted}
           onToggleAudio={handleToggleAudio}
+          onNavigateAdmin={navigateToAdmin}
         />
 
         {/* Main Content Area */}
@@ -122,25 +225,42 @@ export default function App() {
               user={user}
               onLogout={handleLogout}
               onOpenTerminal={() => setIsTerminalOpen(true)}
+              onOpenAdmin={navigateToAdmin}
             />
           )}
         </main>
 
         {/* Global Futuristic Footer */}
-        <footer className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-900/80 text-[11px] font-mono-code text-slate-500 z-10">
+        <footer className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-900/80 text-[11px] font-mono-code text-slate-500 z-10">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span>GATEWAY ROUTED VIA {selectedNode.name}</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            {/* Clearly Visible ADMIN PANEL Button in Footer */}
+            <button
+              type="button"
+              id="footer-admin-panel-btn"
+              onClick={navigateToAdmin}
+              className="px-3 py-1.5 rounded-xl bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,242,254,0.2)] font-bold text-xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+              <span>ADMIN PANEL</span>
+              <span className="text-[10px] text-cyan-400 font-mono-code bg-slate-900 px-1.5 py-0.2 rounded border border-cyan-500/30">
+                /admin
+              </span>
+            </button>
+
+            <span className="text-slate-700 hidden sm:inline">|</span>
+
             <button
               onClick={() => setIsTerminalOpen(true)}
               className="hover:text-cyan-400 transition-colors cursor-pointer"
             >
               LIVE TELEMETRY
             </button>
-            <span>•</span>
+            <span className="text-slate-700 hidden sm:inline">|</span>
             <span>AEGIS CORE DEFENSE © 2026</span>
           </div>
         </footer>

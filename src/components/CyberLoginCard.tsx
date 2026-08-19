@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { 
   Key, User, Lock, Eye, EyeOff, Check, ArrowRight, ShieldCheck, 
-  AlertCircle, RefreshCw
+  AlertCircle, RefreshCw 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { UserProfile } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
 import { CyberPoWVerification } from './CyberPoWVerification';
+import { apiClient } from '../services/apiClient';
 
 interface CyberLoginCardProps {
   onLoginSuccess: (user: UserProfile) => void;
@@ -22,7 +23,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   const [operatorId, setOperatorId] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberSession, setRememberSession] = useState(true);
 
   // Human PoW Proof State
   const [isPoWVerified, setIsPoWVerified] = useState(false);
@@ -35,7 +35,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
 
   // Password Entropy Calculator
   const calculateEntropy = (pwd: string) => {
-    if (!pwd) return { score: 0, label: 'AWAITING CIPHER', color: 'bg-slate-700', bits: 0 };
+    if (!pwd) return { score: 0, label: 'AWAITING KEY', color: 'bg-slate-700', bits: 0 };
     let poolSize = 0;
     if (/[a-z]/.test(pwd)) poolSize += 26;
     if (/[A-Z]/.test(pwd)) poolSize += 26;
@@ -51,7 +51,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
 
   const entropy = calculateEntropy(passphrase);
 
-  // Execute Strict Authentication Flow
+  // Execute Strict Authentication Flow via Server Backend
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -64,68 +64,78 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
       return;
     }
 
-    // Strict exact case-sensitive credential check: ADMINXD / ADMIN5921N
-    const isAuthorized = operatorId === 'ADMINXD' && passphrase === 'ADMIN5921N';
+    const trimmedId = operatorId.trim();
+    const trimmedPass = passphrase.trim();
 
-    if (!isAuthorized) {
+    if (!trimmedId || !trimmedPass) {
       cyberAudio.playError();
       setAuthStep('error');
-      setAuthStatusMessage('ACCESS DENIED — INVALID CREDENTIALS');
+      setAuthStatusMessage('INVALID AUTHORISED ID OR PASS KEY');
       setTimeout(() => setAuthStep('idle'), 3000);
       return;
     }
 
-    // Success path: Proceed with cryptographic handshake animation
     cyberAudio.playScan();
     setAuthStep('hashing');
-    setAuthStatusMessage('HASHING SHA-512 MATRIX...');
+    setAuthStatusMessage('VERIFYING AUTHORISED CIPHER HASH...');
 
-    setTimeout(() => {
+    try {
+      // Backend cryptographic verification call
+      const authResult = await apiClient.login(trimmedId, trimmedPass);
+
       cyberAudio.playClick(1400);
       setAuthStep('lattice');
       setAuthStatusMessage('VALIDATING KYBER-1024 LATTICE SIGNATURE...');
-    }, 700);
 
-    setTimeout(() => {
-      cyberAudio.playClick(1600);
-      setAuthStep('decrypting');
-      setAuthStatusMessage('DECRYPTING ZERO-KNOWLEDGE SESSION TOKEN...');
-    }, 1400);
-
-    setTimeout(() => {
-      cyberAudio.playAccessGranted();
-      setAuthStep('granted');
-      setAuthStatusMessage('ACCESS GRANTED // CLEARANCE LEVEL 5');
-
-      // Trigger Confetti Effect
-      try {
-        confetti({
-          particleCount: 50,
-          spread: 60,
-          origin: { y: 0.6 },
-          colors: ['#00f2fe', '#38bdf8', '#0284c7', '#ffffff'],
-        });
-      } catch {
-        // ignore
-      }
-
-      // Transition to Protected Dashboard
       setTimeout(() => {
-        const user: UserProfile = {
-          username: 'ADMINXD',
-          codename: 'ADMINXD_ROOT',
-          clearanceLevel: 5,
-          role: 'Lead Cryptographic Architect',
-          terminalId: `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
-          ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
-          nodeRegion: selectedRegion,
-          avatarSeed: 'ADMINXD',
-          sessionToken: `AEGIS-${Date.now().toString(16).toUpperCase()}-QKEY`,
-          loginTime: new Date().toISOString(),
-        };
-        onLoginSuccess(user);
-      }, 1200);
-    }, 2100);
+        cyberAudio.playClick(1600);
+        setAuthStep('decrypting');
+        setAuthStatusMessage('VERIFYING AUTHORIZED SESSION TOKEN...');
+      }, 500);
+
+      setTimeout(() => {
+        cyberAudio.playAccessGranted();
+        setAuthStep('granted');
+        setAuthStatusMessage(`PANEL ACCESS GRANTED // ${authResult.user.username}`);
+
+        // Trigger Confetti Effect
+        try {
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.6 },
+            colors: ['#00f2fe', '#38bdf8', '#0284c7', '#ffffff'],
+          });
+        } catch {
+          // ignore
+        }
+
+        // Transition to Protected Dashboard with isolated user state
+        setTimeout(() => {
+          const userObj: UserProfile = {
+            id: authResult.user.id,
+            username: authResult.user.username,
+            codename: `${authResult.user.username}_OPERATOR`,
+            clearanceLevel: authResult.user.clearanceLevel || 3,
+            role: authResult.user.role || 'user',
+            terminalId: `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
+            ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
+            nodeRegion: authResult.user.nodeRegion || selectedRegion,
+            avatarSeed: authResult.user.username,
+            sessionToken: authResult.token,
+            loginTime: new Date().toISOString(),
+            email: authResult.user.email,
+          };
+          onLoginSuccess(userObj);
+        }, 800);
+      }, 1100);
+
+    } catch (err: any) {
+      cyberAudio.playError();
+      setAuthStep('error');
+      setAuthStatusMessage(err.message || 'INVALID AUTHORISED ID OR PASS KEY');
+      setTimeout(() => setAuthStep('idle'), 3000);
+    }
   };
 
   return (
@@ -153,10 +163,10 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
             </span>
           </div>
           <h1 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wider">
-            TERMINAL ACCESS
+            PANEL ACCESS
           </h1>
-          <p className="text-xs text-slate-400 font-mono-code mt-1">
-            Enter authorized credentials to decrypt command node
+          <p className="text-xs text-slate-400 font-mono-code mt-1 tracking-wider uppercase">
+            ENTER AUTHORIZED ID AND VALID PASS KEY TO ACCESS YOUR PANEL
           </p>
         </div>
 
@@ -167,7 +177,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[11px] font-mono-code text-slate-400 tracking-wider flex items-center gap-1.5">
                 <Key className="w-3 h-3 text-cyan-400" />
-                OPERATOR IDENTIFIER / ACCESS ID
+                ENTER AUTHORISED ID
               </label>
               <span className="text-[10px] font-mono-code text-cyan-400/80">SHA-256 HASHED</span>
             </div>
@@ -188,7 +198,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                   setOperatorId(e.target.value);
                   cyberAudio.playKeypress();
                 }}
-                placeholder="Enter Access ID"
+                placeholder="Enter Authorised ID"
                 className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 text-sm font-mono-code text-white placeholder:text-slate-500 transition-all outline-none"
               />
             </div>
@@ -199,7 +209,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[11px] font-mono-code text-slate-400 tracking-wider flex items-center gap-1.5">
                 <Lock className="w-3 h-3 text-cyan-400" />
-                CRYPTOGRAPHIC MASTER PASSPHRASE
+                ENTER VALID PASS KEY
               </label>
               <span className="text-[10px] font-mono-code text-slate-500">ENCRYPTED INPUT</span>
             </div>
@@ -220,7 +230,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                   setPassphrase(e.target.value);
                   cyberAudio.playKeypress();
                 }}
-                placeholder="Enter Passphrase"
+                placeholder="Enter Valid Pass Key"
                 className="w-full pl-10 pr-11 py-3 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 text-sm font-mono-code text-white placeholder:text-slate-500 transition-all outline-none tracking-wider"
               />
               <button
@@ -230,7 +240,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                   setShowPassword(!showPassword);
                 }}
                 className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-cyan-300 transition-colors cursor-pointer"
-                title={showPassword ? 'Hide passphrase' : 'Show passphrase'}
+                title={showPassword ? 'Hide pass key' : 'Show pass key'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -255,28 +265,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
             </div>
           </div>
 
-          {/* Remember Terminal Session Toggle */}
-          <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={rememberSession}
-                onChange={(e) => {
-                  cyberAudio.playClick(900);
-                  setRememberSession(e.target.checked);
-                }}
-                className="w-4 h-4 rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0 accent-cyan-500 cursor-pointer"
-              />
-              <span className="text-xs font-mono-code text-slate-300">
-                PERSIST QUANTUM TOKEN CACHE
-              </span>
-            </label>
-
-            <span className="text-[10px] font-mono-code text-slate-500 hidden sm:inline">
-              24H ROTATION
-            </span>
-          </div>
-
           {/* Interactive Cyber Proof of Work (PoW) Human Verification */}
           <CyberPoWVerification
             isVerified={isPoWVerified}
@@ -296,7 +284,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
               {authStep === 'idle' && (
                 <>
                   <ShieldCheck className="w-4 h-4 text-slate-950 font-bold" />
-                  <span>AUTHENTICATE GATEWAY</span>
+                  <span>VERIFY &amp; ACCESS PANEL</span>
                   <ArrowRight className="w-4 h-4 text-slate-950 group-hover:translate-x-1 transition-transform" />
                 </>
               )}

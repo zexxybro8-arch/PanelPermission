@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Volume2, VolumeX, Terminal, Globe2, Activity, Cpu, Lock } from 'lucide-react';
+import { Shield, Volume2, VolumeX, Terminal, Globe2, Activity, Lock, LayoutDashboard, ShieldCheck } from 'lucide-react';
 import { cyberAudio } from '../utils/cyberAudio';
 import { ServerNode } from '../types';
 
@@ -10,6 +10,7 @@ interface CyberHeaderProps {
   availableNodes: ServerNode[];
   isAudioMuted: boolean;
   onToggleAudio: () => void;
+  onNavigateAdmin?: () => void;
 }
 
 export const CyberHeader: React.FC<CyberHeaderProps> = ({
@@ -19,6 +20,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
   availableNodes,
   isAudioMuted,
   onToggleAudio,
+  onNavigateAdmin,
 }) => {
   const [timeStr, setTimeStr] = useState<string>('');
   const [showNodeSelector, setShowNodeSelector] = useState<boolean>(false);
@@ -49,7 +51,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-display font-bold text-lg sm:text-xl tracking-widest text-white">
-                AEGIS <span className="text-cyan-400 font-light">//</span> DEFENSE
+                AEGIS <span className="text-cyan-400 font-light">//</span> DEFENSE <span className="text-slate-400 font-light text-xs sm:text-sm">— BUY / VERIFY</span>
               </span>
               <span className="px-1.5 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
                 v4.8
@@ -61,8 +63,22 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile-only audio/terminal quick buttons */}
+        {/* Mobile-only quick buttons */}
         <div className="flex sm:hidden items-center gap-2">
+          {onNavigateAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                cyberAudio.playClick(1200);
+                onNavigateAdmin();
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-[10px] font-mono-code font-bold text-cyan-300 flex items-center gap-1 shadow-[0_0_10px_rgba(0,242,254,0.3)]"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>ADMIN</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onToggleAudio}
@@ -108,8 +124,28 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right Controls: Node Cluster Selector, Audio Toggle & Terminal Trigger */}
+      {/* Right Controls: Admin Panel Link, Node Cluster Selector, Audio Toggle & Terminal Trigger */}
       <div className="hidden sm:flex items-center gap-3">
+        {/* Clearly Visible ADMIN PANEL Button */}
+        {onNavigateAdmin && (
+          <button
+            type="button"
+            id="header-admin-panel-btn"
+            onClick={() => {
+              cyberAudio.playClick(1300);
+              onNavigateAdmin();
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-950 via-slate-900 to-cyan-950 hover:from-cyan-900 hover:to-slate-800 border border-cyan-500/50 hover:border-cyan-400 text-xs font-mono-code font-bold text-cyan-300 hover:text-white flex items-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(0,242,254,0.2)] hover:shadow-[0_0_20px_rgba(0,242,254,0.4)]"
+            title="Navigate to /admin command portal"
+          >
+            <ShieldCheck className="w-4 h-4 text-cyan-400" />
+            <span>ADMIN PANEL</span>
+            <span className="px-1.5 py-0.2 rounded text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              /admin
+            </span>
+          </button>
+        )}
+
         {/* Node Cluster Selector */}
         <div className="relative">
           <button
