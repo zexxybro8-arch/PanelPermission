@@ -52,23 +52,16 @@ async function startServer() {
   });
 
   // Health check
-  app.get("/api/health", (_req, res) => {
+  app.get(["/api/health", "/health"], (_req, res) => {
     res.json({ success: true, status: "ok", gateway: "AEGIS // DEFENSE CORE v4.8.2" });
   });
 
-  // API routes FIRST
+  // API routes (Mount both /api and root to guarantee compatibility across reverse proxies)
   app.use("/api", apiRouter);
+  app.use("/", apiRouter);
 
   // Catch-all 404 for any unmatched /api routes (PREVENTS FALLING THROUGH TO HTML SPA HANDLER)
-  app.all("/api/*", (req: Request, res: Response) => {
-    res.status(404).json({
-      success: false,
-      error: `API endpoint ${req.method} ${req.originalUrl || req.url} not found`,
-      message: "API endpoint not found",
-    });
-  });
-
-  app.all("/api", (req: Request, res: Response) => {
+  app.all(["/api/*", "/api"], (req: Request, res: Response) => {
     res.status(404).json({
       success: false,
       error: `API endpoint ${req.method} ${req.originalUrl || req.url} not found`,
