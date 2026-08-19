@@ -46,11 +46,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
   const [settings, setSettings] = useState<SystemSettingsData | null>(null);
 
   const fetchAllAdminData = async () => {
-    if (!apiClient.getAdminToken()) {
-      setIsAuthenticated(false);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
       const [
@@ -85,8 +80,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
       setLogs(logsRes);
       setSettings(settingsRes);
       setIsAuthenticated(true);
-    } catch (err: any) {
-      console.warn('Admin fetch error, requesting level 5 authorization:', err);
+    } catch (err: unknown) {
+      console.warn('Admin session validation failed or level 5 clearance required:', err);
       setIsAuthenticated(false);
     } finally {
       setLoading(false);

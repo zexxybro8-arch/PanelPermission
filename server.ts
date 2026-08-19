@@ -7,6 +7,35 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Trust proxy for secure cookies and accurate protocol/host detection behind reverse proxies
+  app.set("trust proxy", 1);
+
+  // CORS & Security Headers Middleware
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader(
+        "Access-Control-Allow-Methods",
+        "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS"
+      );
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, Accept, X-Requested-With, Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+      );
+      res.setHeader("Access-Control-Max-Age", "86400");
+      res.setHeader("Vary", "Origin");
+    }
+
+    // Handle preflight OPTIONS request immediately
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+
+    next();
+  });
+
   // JSON request body parser
   app.use(express.json());
 

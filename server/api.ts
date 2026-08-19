@@ -16,14 +16,53 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+function parseCookies(req: Request): Record<string, string> {
+  const list: Record<string, string> = {};
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return list;
+  cookieHeader.split(';').forEach((cookie) => {
+    const parts = cookie.split('=');
+    const key = parts.shift()?.trim();
+    if (key) {
+      const val = parts.join('=').trim();
+      list[key] = decodeURIComponent(val);
+    }
+  });
+  return list;
+}
+
 function extractToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7).trim();
   }
+  const cookies = parseCookies(req);
+  if (cookies['aegis_session_token']) {
+    return cookies['aegis_session_token'];
+  }
+  if (cookies['aegis_admin_token']) {
+    return cookies['aegis_admin_token'];
+  }
   const queryToken = req.query.token as string;
   if (queryToken) return queryToken;
   return null;
+}
+
+function setSessionCookie(res: Response, req: Request, token: string) {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
+  const cookieValue = [
+    `aegis_session_token=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'Max-Age=604800', // 7 days
+    isHttps ? 'SameSite=None; Secure' : 'SameSite=Lax',
+  ].join('; ');
+  res.setHeader('Set-Cookie', cookieValue);
+}
+
+function clearSessionCookie(res: Response, req: Request) {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
+  res.setHeader('Set-Cookie', `aegis_session_token=; Path=/; HttpOnly; Max-Age=0; ${isHttps ? 'SameSite=None; Secure' : 'SameSite=Lax'}`);
 }
 
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -159,6 +198,9 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
     email: user.email,
   };
 
+  // Set secure HTTP-only session cookie
+  setSessionCookie(res, req, session.token);
+
   return res.json({
     success: true,
     message: 'Authentication successful. Access granted.',
@@ -215,6 +257,9 @@ apiRouter.post('/auth/admin-login', (req: Request, res: Response) => {
     clearanceLevel: user.clearanceLevel,
   };
 
+  // Set secure HTTP-only session cookie
+  setSessionCookie(res, req, session.token);
+
   return res.json({
     success: true,
     message: 'Administrator authentication successful. System Level 5 authorized.',
@@ -267,12 +312,16 @@ apiRouter.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res: Response
 });
 
 // POST /api/auth/logout
-apiRouter.post('/auth/logout', requireAuth, (req: AuthenticatedRequest, res: Response) => {
-  const token = req.userSession!.token;
-  aegisDb.revokeSession(token, req.userSession!.username);
+apiRouter.post('/auth/logout', (req: Request, res: Response) => {
+  const token = extractToken(req);
+  if (token) {
+    aegisDb.revokeSession(token);
+  }
+  clearSessionCookie(res, req);
   return res.json({
     success: true,
     message: 'Session revoked successfully. Logged out.',
+    data: {},
   });
 });
 

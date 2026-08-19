@@ -973,11 +973,11 @@ class AegisDatabase {
     return sess;
   }
 
-  public revokeSession(token: string, adminId: string): boolean {
+  public revokeSession(token: string, revokedBy: string = 'USER'): boolean {
     const sess = this.sessions.get(token);
     if (!sess) return false;
     sess.isActive = false;
-    this.logActivity(adminId, 'SESSION_REVOKED', sess.username, 'SUCCESS', `Session ${sess.id} revoked.`);
+    this.logActivity(revokedBy, 'SESSION_REVOKED', sess.username, 'SUCCESS', `Session ${sess.id} revoked.`);
     return true;
   }
 

@@ -5,6 +5,35 @@ import {
 } from '../types';
 import { extractErrorMessage } from '../utils/errorMessage';
 
+/**
+ * Resolves the API Base URL dynamically.
+ * Priority:
+ * 1. VITE_API_BASE_URL / VITE_API_URL / VITE_BACKEND_URL (for decoupled/external deployments)
+ * 2. Empty string '' (for unified full-stack deployments where the backend serves static frontend assets)
+ */
+export function getApiBaseUrl(): string {
+  const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
+  const envUrl = (
+    (metaEnv ? (
+      metaEnv.VITE_API_BASE_URL ||
+      metaEnv.VITE_API_URL ||
+      metaEnv.VITE_BACKEND_URL ||
+      ''
+    ) : '')
+  ).trim();
+
+  return envUrl.replace(/\/+$/, '');
+}
+
+export function resolveApiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  const base = getApiBaseUrl();
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return base ? `${base}${normalizedPath}` : normalizedPath;
+}
+
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('aegis_admin_token') || localStorage.getItem('aegis_auth_token');
   const headers: Record<string, string> = {
@@ -19,21 +48,33 @@ function getAuthHeader(): Record<string, string> {
 
 /**
  * Robust JSON Fetcher
- * Safely parses server responses, extracts human-readable messages, and prevents
- * "[object Object]" or HTML parsing exceptions.
+ * Safely parses server responses, extracts human-readable messages, supports credentials/cookies,
+ * and outputs sanitized development/production network diagnostics.
  */
-async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const headers = {
+async function safeFetchJson<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const resolvedUrl = resolveApiUrl(path);
+  const headers: Record<string, string> = {
     'Accept': 'application/json',
-    ...(options.headers || {}),
+    ...(options.headers as Record<string, string> || {}),
   };
 
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers,
+    credentials: 'include', // Guarantees cookies and cross-origin credentials are sent
+  };
+
+  const startMs = Date.now();
   let res: Response;
   try {
-    res = await fetch(url, { ...options, headers });
+    res = await fetch(resolvedUrl, fetchOptions);
   } catch (netErr: any) {
-    console.error(`[NETWORK ERROR] Failed to fetch ${url}:`, netErr);
-    const friendlyNetMsg = extractErrorMessage(netErr, 'Unable to reach the security server. Check your connection.');
+    const friendlyNetMsg = extractErrorMessage(netErr, 'Unable to reach the security server. Check network or CORS configuration.');
+    console.warn(`[AEGIS DIAGNOSTIC] ❌ NETWORK/CORS FAILURE: ${options.method || 'GET'} ${resolvedUrl}`, {
+      error: friendlyNetMsg,
+      resolvedUrl,
+      durationMs: Date.now() - startMs,
+    });
     throw new Error(`Connection error: ${friendlyNetMsg}`);
   }
 
@@ -42,7 +83,7 @@ async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise
 
   if (!isJson) {
     const rawText = await res.text();
-    console.warn(`[API NON-JSON RESPONSE] ${options.method || 'GET'} ${url}`, {
+    console.warn(`[AEGIS DIAGNOSTIC] ⚠️ NON-JSON RESPONSE: ${options.method || 'GET'} ${resolvedUrl}`, {
       status: res.status,
       statusText: res.statusText,
       contentType,
@@ -59,9 +100,18 @@ async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise
   try {
     data = await res.json();
   } catch (jsonErr: any) {
-    console.error(`[JSON PARSE ERROR] Failed to parse JSON from ${url}:`, jsonErr);
+    console.error(`[AEGIS DIAGNOSTIC] ❌ JSON PARSE ERROR: ${resolvedUrl}`, jsonErr);
     throw new Error('Malformed security payload received from gateway');
   }
+
+  // Diagnostic log for successful or handled response (NO passwords, tokens, or cookies logged)
+  console.log(`[AEGIS DIAGNOSTIC] ✅ ${options.method || 'GET'} ${resolvedUrl}`, {
+    status: res.status,
+    contentType,
+    success: data?.success ?? res.ok,
+    sanitizedMessage: typeof data?.message === 'string' ? data.message : undefined,
+    durationMs: Date.now() - startMs,
+  });
 
   if (!res.ok) {
     const errorMessage = extractErrorMessage(data, `Request failed with status ${res.status}`);
