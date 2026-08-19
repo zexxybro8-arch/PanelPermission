@@ -18,10 +18,9 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   onLoginSuccess,
   selectedRegion,
 }) => {
-  // SECURITY NOTE: Demo client-side credentials (ANGRYMOD / ANGRY490) for interface preview only.
-  // Production authentication must be handled server-side and passwords must never be stored in frontend code.
-  const [operatorId, setOperatorId] = useState('ANGRYMOD');
-  const [passphrase, setPassphrase] = useState('ANGRY490');
+  // Empty initial React states on page load (no pre-filled credentials)
+  const [operatorId, setOperatorId] = useState('');
+  const [passphrase, setPassphrase] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberSession, setRememberSession] = useState(true);
 
@@ -36,7 +35,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
 
   // Password Entropy Calculator
   const calculateEntropy = (pwd: string) => {
-    if (!pwd) return { score: 0, label: 'NONE', color: 'bg-slate-700', bits: 0 };
+    if (!pwd) return { score: 0, label: 'AWAITING CIPHER', color: 'bg-slate-700', bits: 0 };
     let poolSize = 0;
     if (/[a-z]/.test(pwd)) poolSize += 26;
     if (/[A-Z]/.test(pwd)) poolSize += 26;
@@ -73,8 +72,8 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
       return;
     }
 
-    // Demo validation check
-    const isDemoMatch = (trimmedId.toUpperCase() === 'ANGRYMOD' && passphrase === 'ANGRY490') || 
+    // Demo credentials check (ANGRYMOD / ANGRY490)
+    const isDemoMatch = (trimmedId.toUpperCase() === 'ANGRYMOD' && passphrase === 'ANGRY490') ||
                         (trimmedId.length > 0 && passphrase.length >= 4);
 
     if (!isDemoMatch) {
@@ -122,7 +121,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
       setTimeout(() => {
         const user: UserProfile = {
           username: trimmedId || 'ANGRYMOD',
-          codename: 'ANGRYMOD_PRIME',
+          codename: trimmedId.toUpperCase() === 'ANGRYMOD' ? 'ANGRYMOD_PRIME' : `${trimmedId.toUpperCase()}_OPERATOR`,
           clearanceLevel: 5,
           role: 'Lead Cryptographic Architect',
           terminalId: `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
@@ -170,7 +169,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
         </div>
 
         {/* Credentials Form */}
-        <form onSubmit={handleAuthenticate} className="space-y-4">
+        <form onSubmit={handleAuthenticate} autoComplete="off" className="space-y-4">
           {/* Operator Identifier Input */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -189,12 +188,16 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                 type="text"
                 required
                 value={operatorId}
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => {
                   setOperatorId(e.target.value);
                   cyberAudio.playKeypress();
                 }}
-                placeholder="e.g. ANGRYMOD"
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 text-sm font-mono-code text-white placeholder:text-slate-600 transition-all outline-none"
+                placeholder="Enter Access ID"
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 text-sm font-mono-code text-white placeholder:text-slate-500 transition-all outline-none"
               />
             </div>
           </div>
@@ -217,12 +220,16 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={passphrase}
+                autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(e) => {
                   setPassphrase(e.target.value);
                   cyberAudio.playKeypress();
                 }}
-                placeholder="••••••••••••••••"
-                className="w-full pl-10 pr-11 py-3 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 text-sm font-mono-code text-white placeholder:text-slate-600 transition-all outline-none tracking-wider"
+                placeholder="Enter Passphrase"
+                className="w-full pl-10 pr-11 py-3 rounded-xl bg-slate-950/80 border border-slate-700/80 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 text-sm font-mono-code text-white placeholder:text-slate-500 transition-all outline-none tracking-wider"
               />
               <button
                 type="button"
@@ -242,9 +249,9 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
               <div className="flex items-center justify-between text-[10px] font-mono-code">
                 <span className="text-slate-400">CIPHER ENTROPY:</span>
                 <span className={`font-bold ${
-                  entropy.score >= 3 ? 'text-cyan-300' : entropy.score === 2 ? 'text-amber-300' : 'text-rose-400'
+                  entropy.score >= 3 ? 'text-cyan-300' : entropy.score === 2 ? 'text-amber-300' : entropy.score === 1 ? 'text-rose-400' : 'text-slate-500'
                 }`}>
-                  {entropy.label} ({entropy.bits} BITS)
+                  {entropy.label} {entropy.bits > 0 ? `(${entropy.bits} BITS)` : ''}
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-1 h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">

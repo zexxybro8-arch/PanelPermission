@@ -1,6 +1,13 @@
 export type AuthTab = 'credentials';
 
-export type SecurityLevel = 'standard' | 'enhanced' | 'quantum';
+export interface CyberModule {
+  id: string;
+  name: string;
+  description: string;
+  tag: string;
+  version: string;
+  enabled: boolean;
+}
 
 export interface UserProfile {
   username: string;
