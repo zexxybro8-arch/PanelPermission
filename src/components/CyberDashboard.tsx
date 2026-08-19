@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Shield, ArrowLeft, Terminal, Sparkles, Lock, 
+  ArrowLeft, Terminal, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
-  ChevronRight, ShieldAlert, CheckCircle2
+  ChevronRight
 } from 'lucide-react';
 import { UserProfile, CyberModule } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
@@ -171,19 +171,6 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
             BACK TO GATEWAY
           </button>
         </div>
-      </div>
-
-      {/* Security Demo Notice Banner */}
-      <div className="p-3.5 rounded-2xl bg-cyan-950/30 border border-cyan-500/25 flex items-center justify-between gap-3 text-xs font-mono-code text-slate-300">
-        <div className="flex items-center gap-2.5">
-          <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span>
-            <strong className="text-cyan-300">DEMO ENVIRONMENT:</strong> All toggles trigger the simulated access gateway with zero changes to device permissions or files.
-          </span>
-        </div>
-        <span className="text-[10px] text-cyan-400 font-bold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40 shrink-0 hidden md:inline">
-          6 MODULES LOADED
-        </span>
       </div>
 
       {/* Grid of 6 Cyber Modules */}
