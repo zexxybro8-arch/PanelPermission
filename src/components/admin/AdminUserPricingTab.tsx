@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AdminUser, UserCustomPricing, AdminRuntimePlan } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminUserPricingTabProps {
   users: AdminUser[];
@@ -60,8 +61,8 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
         setP30(default30);
         setPPerm(defaultPerm);
       }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to load user pricing' });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: extractErrorMessage(err, 'Failed to load user pricing') });
     } finally {
       setLoading(false);
     }
@@ -88,8 +89,8 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
       setCustomPricing(updated);
       setMessage({ type: 'success', text: `CUSTOM PRICING SAVED FOR ${selectedUserId}!` });
       if (onPricingUpdated) onPricingUpdated();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to save custom pricing' });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: extractErrorMessage(err, 'Failed to save custom pricing') });
     } finally {
       setSaving(false);
     }
@@ -115,8 +116,8 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
 
       setMessage({ type: 'success', text: `PRICING RESET TO GLOBAL DEFAULTS FOR ${selectedUserId}` });
       if (onPricingUpdated) onPricingUpdated();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to reset pricing' });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: extractErrorMessage(err, 'Failed to reset pricing') });
     } finally {
       setSaving(false);
     }

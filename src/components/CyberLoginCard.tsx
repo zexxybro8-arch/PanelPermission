@@ -8,6 +8,7 @@ import { UserProfile } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
 import { CyberPoWVerification } from './CyberPoWVerification';
 import { apiClient } from '../services/apiClient';
+import { extractErrorMessage } from '../utils/errorMessage';
 
 interface CyberLoginCardProps {
   onLoginSuccess: (user: UserProfile) => void;
@@ -91,12 +92,16 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
         cyberAudio.playClick(1600);
         setAuthStep('decrypting');
         setAuthStatusMessage('VERIFYING AUTHORIZED SESSION TOKEN...');
-      }, 500);
+      }, 450);
 
       setTimeout(() => {
         cyberAudio.playAccessGranted();
         setAuthStep('granted');
-        setAuthStatusMessage(`PANEL ACCESS GRANTED // ${authResult.user.username}`);
+        const username = authResult?.user?.username || trimmedId;
+        const msg = typeof authResult?.message === 'string' && authResult.message !== '[object Object]'
+          ? authResult.message
+          : `PANEL ACCESS GRANTED // ${username}`;
+        setAuthStatusMessage(msg);
 
         // Trigger Confetti Effect
         try {
@@ -127,14 +132,15 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
             email: authResult.user.email,
           };
           onLoginSuccess(userObj);
-        }, 800);
-      }, 1100);
+        }, 750);
+      }, 950);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       cyberAudio.playError();
       setAuthStep('error');
-      setAuthStatusMessage(err.message || 'INVALID AUTHORISED ID OR PASS KEY');
-      setTimeout(() => setAuthStep('idle'), 3000);
+      const safeMsg = extractErrorMessage(err, 'INVALID AUTHORISED ID OR PASS KEY');
+      setAuthStatusMessage(safeMsg);
+      setTimeout(() => setAuthStep('idle'), 3500);
     }
   };
 

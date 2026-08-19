@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AdminOrder } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminOrdersTabProps {
   orders: AdminOrder[];
@@ -35,8 +36,8 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
     try {
       await apiClient.updateOrderStatus(orderId, newStatus);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update order status');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to update order status'));
     } finally {
       setUpdatingOrderId(null);
     }

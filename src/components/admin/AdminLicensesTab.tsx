@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AdminLicense, AdminUser, CyberModule } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminLicensesTabProps {
   licenses: AdminLicense[];
@@ -40,8 +41,8 @@ export const AdminLicensesTab: React.FC<AdminLicensesTabProps> = ({
       });
       setIsGrantModalOpen(false);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to grant license');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to grant license'));
     } finally {
       setSaving(false);
     }
@@ -52,8 +53,8 @@ export const AdminLicensesTab: React.FC<AdminLicensesTabProps> = ({
     try {
       await apiClient.updateLicenseStatus(lic.id, nextStatus);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update license status');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to update license status'));
     }
   };
 
@@ -65,8 +66,8 @@ export const AdminLicensesTab: React.FC<AdminLicensesTabProps> = ({
       await apiClient.extendLicense(extendingLicense.id, Number(extraDaysInput));
       setExtendingLicense(null);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to extend license');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to extend license'));
     } finally {
       setSaving(false);
     }

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { CyberModule } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminModulesTabProps {
   modules: CyberModule[];
@@ -45,8 +46,8 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
     try {
       await apiClient.toggleModule(mod.id);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to toggle module status');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to toggle module status'));
     }
   };
 
@@ -70,8 +71,8 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
       setNewName('');
       setNewDescription('');
       onRefresh();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create module');
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, 'Failed to create module'));
     } finally {
       setSaving(false);
     }
@@ -93,8 +94,8 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
       });
       setEditingModule(null);
       onRefresh();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update module');
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, 'Failed to update module'));
     } finally {
       setSaving(false);
     }
@@ -107,8 +108,8 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
       await apiClient.deleteModule(deletingModule.id);
       setDeletingModule(null);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete module');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to delete module'));
     } finally {
       setSaving(false);
     }

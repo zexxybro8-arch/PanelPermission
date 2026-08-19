@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { AdminRuntimePlan } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminRuntimePlansTabProps {
   plans: AdminRuntimePlan[];
@@ -39,8 +40,8 @@ export const AdminRuntimePlansTab: React.FC<AdminRuntimePlansTabProps> = ({
       });
       setEditingPlan(null);
       onRefresh();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update plan');
+    } catch (err: unknown) {
+      setError(extractErrorMessage(err, 'Failed to update plan'));
     } finally {
       setSaving(false);
     }

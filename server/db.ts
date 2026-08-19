@@ -531,15 +531,18 @@ class AegisDatabase {
     return undefined;
   }
 
-  public createUser(userData: {
-    username: string;
-    password: string;
-    role?: 'admin' | 'operator' | 'user';
-    clearanceLevel?: number;
-    email?: string;
-    nodeRegion?: string;
-    accountStatus?: 'active' | 'disabled';
-  }): UserEntity {
+  public createUser(
+    userData: {
+      username: string;
+      password: string;
+      role?: 'admin' | 'operator' | 'user';
+      clearanceLevel?: number;
+      email?: string;
+      nodeRegion?: string;
+      accountStatus?: 'active' | 'disabled';
+    },
+    adminId?: string
+  ): UserEntity {
     const salt = generateSalt();
     const id = userData.username.toUpperCase().startsWith('USR-')
       ? userData.username.toUpperCase()
@@ -558,6 +561,15 @@ class AegisDatabase {
       createdAt: new Date().toISOString(),
     };
     this.users.set(id, newUser);
+    if (adminId) {
+      this.logActivity(
+        adminId,
+        'USER_ACCOUNT_CREATED',
+        id,
+        'SUCCESS',
+        `Admin created authorized account ${id} with status ${newUser.accountStatus}`
+      );
+    }
     return newUser;
   }
 

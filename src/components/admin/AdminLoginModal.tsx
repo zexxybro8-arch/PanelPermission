@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Lock, User, Key, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { ShieldAlert, Key, User, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminLoginModalProps {
   onSuccess: (user: any) => void;
@@ -24,8 +25,9 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     try {
       const data = await apiClient.adminLogin(username.trim(), password.trim());
       onSuccess(data.user);
-    } catch (err: any) {
-      setError(err.message || 'Admin authentication failed. Invalid master key.');
+    } catch (err: unknown) {
+      const errorMsg = extractErrorMessage(err, 'Admin authentication failed. Invalid master key.');
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

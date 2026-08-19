@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { AdminUser, CyberModule } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminUsersTabProps {
   users: AdminUser[];
@@ -100,8 +101,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     try {
       await apiClient.updateUserStatus(user.id, nextStatus);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update user status');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to update user status'));
     } finally {
       setActionLoading(null);
     }
@@ -114,8 +115,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       const count = await apiClient.resetUserSessions(user.id);
       alert(`Terminated ${count} active session(s) for ${user.username}.`);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to reset sessions');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to reset sessions'));
     } finally {
       setActionLoading(null);
     }
@@ -127,8 +128,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     try {
       await apiClient.deleteUser(user.id);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete user');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to delete user'));
     } finally {
       setActionLoading(null);
     }
@@ -152,8 +153,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       const res = await apiClient.resetUserPassword(resetModalUser.id, resetGeneratedKey);
       setResetSuccessMessage(`Pass Key successfully updated to: ${res.newPassKey}`);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to reset pass key');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to reset pass key'));
     } finally {
       setActionLoading(null);
     }
@@ -198,8 +199,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         passKey: result.createdCredentials.passKey,
       });
       onRefresh();
-    } catch (err: any) {
-      setFormError(err.message || 'Failed to create user account');
+    } catch (err: unknown) {
+      setFormError(extractErrorMessage(err, 'Failed to create user account'));
     }
   };
 

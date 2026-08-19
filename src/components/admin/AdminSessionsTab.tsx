@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AdminSession } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminSessionsTabProps {
   sessions: AdminSession[];
@@ -24,8 +25,8 @@ export const AdminSessionsTab: React.FC<AdminSessionsTabProps> = ({
     try {
       await apiClient.revokeSession(token);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to revoke session');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to revoke session'));
     } finally {
       setLoadingToken(null);
     }
@@ -38,8 +39,8 @@ export const AdminSessionsTab: React.FC<AdminSessionsTabProps> = ({
       const count = await apiClient.revokeAllSessions();
       alert(`Successfully invalidated ${count} active sessions.`);
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to revoke sessions');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to revoke sessions'));
     } finally {
       setRevokingAll(false);
     }

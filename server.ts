@@ -31,7 +31,7 @@ async function startServer() {
   app.use("/api", apiRouter);
 
   // Catch-all 404 for any unmatched /api routes (PREVENTS FALLING THROUGH TO HTML SPA HANDLER)
-  app.all("/api/*all", (req: Request, res: Response) => {
+  app.all("/api/*", (req: Request, res: Response) => {
     res.status(404).json({
       success: false,
       error: `API endpoint ${req.method} ${req.originalUrl || req.url} not found`,

@@ -3,6 +3,7 @@ import {
   AdminOrder, AdminLicense, AdminSession, AdminActivityLog, 
   AdminOverviewStats, SystemSettingsData, UserProfile 
 } from '../types';
+import { extractErrorMessage } from '../utils/errorMessage';
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('aegis_admin_token') || localStorage.getItem('aegis_auth_token');
@@ -18,8 +19,8 @@ function getAuthHeader(): Record<string, string> {
 
 /**
  * Robust JSON Fetcher
- * Safely parses server responses and prevents "Unexpected token < or T in JSON"
- * when a non-JSON / HTML error response is received.
+ * Safely parses server responses, extracts human-readable messages, and prevents
+ * "[object Object]" or HTML parsing exceptions.
  */
 async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise<T> {
   const headers = {
@@ -32,7 +33,8 @@ async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise
     res = await fetch(url, { ...options, headers });
   } catch (netErr: any) {
     console.error(`[NETWORK ERROR] Failed to fetch ${url}:`, netErr);
-    throw new Error(`Network connection error: ${netErr.message || 'Unable to reach server'}`);
+    const friendlyNetMsg = extractErrorMessage(netErr, 'Unable to reach the security server. Check your connection.');
+    throw new Error(`Connection error: ${friendlyNetMsg}`);
   }
 
   const contentType = res.headers.get('content-type') || '';
@@ -40,7 +42,6 @@ async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise
 
   if (!isJson) {
     const rawText = await res.text();
-    // Debug log without exposing user secrets
     console.warn(`[API NON-JSON RESPONSE] ${options.method || 'GET'} ${url}`, {
       status: res.status,
       statusText: res.statusText,
@@ -49,9 +50,9 @@ async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise
     });
 
     if (!res.ok) {
-      throw new Error(`Server returned error status ${res.status} (${res.statusText || 'Non-JSON'})`);
+      throw new Error(`Security server responded with error (${res.status} ${res.statusText || 'Error'})`);
     }
-    throw new Error(`Unexpected non-JSON response from server (${contentType || 'unknown type'})`);
+    throw new Error(`Unexpected non-JSON response from server (${contentType || 'text/html'})`);
   }
 
   let data: any;
@@ -59,11 +60,11 @@ async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise
     data = await res.json();
   } catch (jsonErr: any) {
     console.error(`[JSON PARSE ERROR] Failed to parse JSON from ${url}:`, jsonErr);
-    throw new Error('Malformed JSON received from server');
+    throw new Error('Malformed security payload received from gateway');
   }
 
   if (!res.ok) {
-    const errorMessage = data?.error || data?.message || `Request failed with status ${res.status}`;
+    const errorMessage = extractErrorMessage(data, `Request failed with status ${res.status}`);
     throw new Error(errorMessage);
   }
 
@@ -82,39 +83,62 @@ export const apiClient = {
   // ==========================================
   // AUTH
   // ==========================================
-  async login(username: string, passKey: string): Promise<{ success: boolean; token: string; user: UserProfile }> {
-    const data = await safeFetchJson<{ success: boolean; token: string; user: UserProfile }>('/api/auth/login', {
+  async login(username: string, passKey: string): Promise<{ success: boolean; message: string; token: string; user: UserProfile }> {
+    const res = await safeFetchJson<any>('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, passKey, authorisedId: username }),
     });
 
-    if (data.token) {
-      localStorage.setItem('aegis_auth_token', data.token);
-      if (data.user.role === 'admin') {
-        localStorage.setItem('aegis_admin_token', data.token);
+    const token = res?.data?.token || res?.token;
+    const user = res?.data?.user || res?.user;
+    const message = extractErrorMessage(res, 'Authentication successful');
+
+    if (token) {
+      localStorage.setItem('aegis_auth_token', token);
+      if (user?.role === 'admin') {
+        localStorage.setItem('aegis_admin_token', token);
       }
     }
-    return data;
+    return {
+      success: true,
+      message,
+      token,
+      user,
+    };
   },
 
-  async adminLogin(username: string, password: string): Promise<{ success: boolean; token: string; user: any }> {
-    const data = await safeFetchJson<{ success: boolean; token: string; user: any }>('/api/auth/admin-login', {
+  async adminLogin(username: string, password: string): Promise<{ success: boolean; message: string; token: string; user: any }> {
+    const res = await safeFetchJson<any>('/api/auth/admin-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
 
-    if (data.token) {
-      localStorage.setItem('aegis_admin_token', data.token);
+    const token = res?.data?.token || res?.token;
+    const user = res?.data?.user || res?.user;
+    const message = extractErrorMessage(res, 'Admin authentication successful');
+
+    if (token) {
+      localStorage.setItem('aegis_admin_token', token);
     }
-    return data;
+    return {
+      success: true,
+      message,
+      token,
+      user,
+    };
   },
 
   async getMe(): Promise<{ user: UserProfile; licenses: AdminLicense[]; customPricing: UserCustomPricing | null }> {
-    return safeFetchJson<{ user: UserProfile; licenses: AdminLicense[]; customPricing: UserCustomPricing | null }>('/api/auth/me', {
+    const res = await safeFetchJson<any>('/api/auth/me', {
       headers: getAuthHeader(),
     });
+    return {
+      user: res?.data?.user || res?.user,
+      licenses: res?.data?.licenses || res?.licenses || [],
+      customPricing: res?.data?.customPricing || res?.customPricing || null,
+    };
   },
 
   async logout(): Promise<void> {
@@ -142,30 +166,37 @@ export const apiClient = {
     settings: any;
   }> {
     const url = userId ? `/api/portal/config?userId=${encodeURIComponent(userId)}` : '/api/portal/config';
-    return safeFetchJson<{
-      modules: CyberModule[];
-      plans: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[];
-      userLicenses: AdminLicense[];
-      upiQrImage: string;
-      settings: any;
-    }>(url, {
+    const res = await safeFetchJson<any>(url, {
       headers: getAuthHeader(),
     });
+    const d = res?.data || res;
+    return {
+      modules: d?.modules || [],
+      plans: d?.plans || [],
+      userLicenses: d?.userLicenses || [],
+      upiQrImage: d?.upiQrImage || '',
+      settings: d?.settings || {},
+    };
   },
 
   async createOrder(userId: string, moduleId: string, planId: string): Promise<{ order: AdminOrder; upiQrImageUrl: string }> {
-    return safeFetchJson<{ order: AdminOrder; upiQrImageUrl: string }>('/api/portal/orders', {
+    const res = await safeFetchJson<any>('/api/portal/orders', {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify({ userId, moduleId, planId }),
     });
+    const d = res?.data || res;
+    return {
+      order: d?.order,
+      upiQrImageUrl: d?.upiQrImageUrl || '',
+    };
   },
 
   async getOrder(orderId: string): Promise<AdminOrder> {
-    const data = await safeFetchJson<{ order: AdminOrder }>(`/api/portal/orders/${encodeURIComponent(orderId)}`, {
+    const res = await safeFetchJson<any>(`/api/portal/orders/${encodeURIComponent(orderId)}`, {
       headers: getAuthHeader(),
     });
-    return data.order;
+    return res?.data?.order || res?.order;
   },
 
   // ==========================================
@@ -177,14 +208,16 @@ export const apiClient = {
     recentLogs: AdminActivityLog[];
     activeSessionsCount: number;
   }> {
-    return safeFetchJson<{
-      stats: AdminOverviewStats;
-      recentOrders: AdminOrder[];
-      recentLogs: AdminActivityLog[];
-      activeSessionsCount: number;
-    }>('/api/admin/overview', {
+    const res = await safeFetchJson<any>('/api/admin/overview', {
       headers: getAuthHeader(),
     });
+    const d = res?.data || res;
+    return {
+      stats: d?.stats,
+      recentOrders: d?.recentOrders || [],
+      recentLogs: d?.recentLogs || [],
+      activeSessionsCount: d?.activeSessionsCount || 0,
+    };
   },
 
   // ==========================================
@@ -192,16 +225,21 @@ export const apiClient = {
   // ==========================================
   async getUsers(search?: string): Promise<AdminUser[]> {
     const url = search ? `/api/admin/users?search=${encodeURIComponent(search)}` : '/api/admin/users';
-    const data = await safeFetchJson<{ users: AdminUser[] }>(url, {
+    const res = await safeFetchJson<any>(url, {
       headers: getAuthHeader(),
     });
-    return data.users;
+    return res?.data?.users || res?.users || [];
   },
 
   async generateCredentials(): Promise<{ authorisedId: string; passKey: string }> {
-    return safeFetchJson<{ authorisedId: string; passKey: string }>('/api/admin/users/generate-credentials', {
+    const res = await safeFetchJson<any>('/api/admin/users/generate-credentials', {
       headers: getAuthHeader(),
     });
+    const d = res?.data || res;
+    return {
+      authorisedId: d?.authorisedId,
+      passKey: d?.passKey,
+    };
   },
 
   async createUser(userData: {
@@ -224,30 +262,47 @@ export const apiClient = {
     initialPlanId?: string;
     initialDurationDays?: number;
   }): Promise<{ user: AdminUser; createdCredentials: { authorisedId: string; passKey: string }; initialLicense?: any }> {
-    return safeFetchJson<{ user: AdminUser; createdCredentials: { authorisedId: string; passKey: string }; initialLicense?: any }>('/api/admin/users', {
+    const res = await safeFetchJson<any>('/api/admin/users', {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify(userData),
     });
+    const d = res?.data || res;
+    return {
+      user: d?.user,
+      createdCredentials: d?.createdCredentials,
+      initialLicense: d?.initialLicense,
+    };
   },
 
   async resetUserPassword(userId: string, newPassKey?: string): Promise<{ success: boolean; message: string; newPassKey: string }> {
-    return safeFetchJson<{ success: boolean; message: string; newPassKey: string }>(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+    const res = await safeFetchJson<any>(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify({ newPassKey }),
     });
+    const message = extractErrorMessage(res, 'Pass Key reset successfully');
+    const newKey = res?.data?.newPassKey || res?.newPassKey;
+    return {
+      success: true,
+      message,
+      newPassKey: newKey,
+    };
   },
 
   async deleteUser(userId: string): Promise<{ success: boolean; message: string }> {
-    return safeFetchJson<{ success: boolean; message: string }>(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    const res = await safeFetchJson<any>(`/api/admin/users/${encodeURIComponent(userId)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
+    return {
+      success: true,
+      message: extractErrorMessage(res, 'User account permanently deleted'),
+    };
   },
 
   async updateUserStatus(userId: string, status: 'active' | 'disabled'): Promise<void> {
-    await safeFetchJson<{ success: boolean }>(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
+    await safeFetchJson<any>(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ status }),
@@ -255,20 +310,25 @@ export const apiClient = {
   },
 
   async resetUserSessions(userId: string): Promise<number> {
-    const data = await safeFetchJson<{ success: boolean; revokedCount: number }>(`/api/admin/users/${encodeURIComponent(userId)}/reset-sessions`, {
+    const res = await safeFetchJson<any>(`/api/admin/users/${encodeURIComponent(userId)}/reset-sessions`, {
       method: 'POST',
       headers: getAuthHeader(),
     });
-    return data.revokedCount;
+    return res?.data?.revokedCount || res?.revokedCount || 0;
   },
 
   // ==========================================
   // ADMIN: INDIVIDUAL USER PRICING (KEY)
   // ==========================================
   async getCustomPricings(): Promise<{ customPricings: UserCustomPricing[]; globalPlans: AdminRuntimePlan[] }> {
-    return safeFetchJson<{ customPricings: UserCustomPricing[]; globalPlans: AdminRuntimePlan[] }>('/api/admin/pricing', {
+    const res = await safeFetchJson<any>('/api/admin/pricing', {
       headers: getAuthHeader(),
     });
+    const d = res?.data || res;
+    return {
+      customPricings: d?.customPricings || [],
+      globalPlans: d?.globalPlans || [],
+    };
   },
 
   async getUserPricingDetails(userId: string): Promise<{
@@ -276,29 +336,31 @@ export const apiClient = {
     customPricing: UserCustomPricing | null;
     effectivePlans: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[];
   }> {
-    return safeFetchJson<{
-      userId: string;
-      customPricing: UserCustomPricing | null;
-      effectivePlans: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[];
-    }>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
+    const res = await safeFetchJson<any>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
       headers: getAuthHeader(),
     });
+    const d = res?.data || res;
+    return {
+      userId: d?.userId,
+      customPricing: d?.customPricing || null,
+      effectivePlans: d?.effectivePlans || [],
+    };
   },
 
   async saveCustomPricing(
     userId: string,
     prices: { plan15Price: number; plan20Price: number; plan30Price: number; planPermPrice: number }
   ): Promise<UserCustomPricing> {
-    const data = await safeFetchJson<{ success: boolean; customPricing: UserCustomPricing }>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
+    const res = await safeFetchJson<any>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(prices),
     });
-    return data.customPricing;
+    return res?.data?.customPricing || res?.customPricing;
   },
 
   async resetCustomPricing(userId: string): Promise<void> {
-    await safeFetchJson<{ success: boolean; reset: boolean }>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
+    await safeFetchJson<any>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
@@ -308,59 +370,59 @@ export const apiClient = {
   // ADMIN: RUNTIME PLANS
   // ==========================================
   async getRuntimePlans(): Promise<AdminRuntimePlan[]> {
-    const data = await safeFetchJson<{ plans: AdminRuntimePlan[] }>('/api/admin/plans', {
+    const res = await safeFetchJson<any>('/api/admin/plans', {
       headers: getAuthHeader(),
     });
-    return data.plans;
+    return res?.data?.plans || res?.plans || [];
   },
 
   async updateRuntimePlan(planId: string, planData: Partial<AdminRuntimePlan>): Promise<AdminRuntimePlan> {
-    const data = await safeFetchJson<{ success: boolean; plan: AdminRuntimePlan }>(`/api/admin/plans/${encodeURIComponent(planId)}`, {
+    const res = await safeFetchJson<any>(`/api/admin/plans/${encodeURIComponent(planId)}`, {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(planData),
     });
-    return data.plan;
+    return res?.data?.plan || res?.plan;
   },
 
   // ==========================================
   // ADMIN: MODULES
   // ==========================================
   async getModules(): Promise<CyberModule[]> {
-    const data = await safeFetchJson<{ modules: CyberModule[] }>('/api/admin/modules', {
+    const res = await safeFetchJson<any>('/api/admin/modules', {
       headers: getAuthHeader(),
     });
-    return data.modules;
+    return res?.data?.modules || res?.modules || [];
   },
 
   async createModule(modData: Partial<CyberModule>): Promise<CyberModule> {
-    const data = await safeFetchJson<{ success: boolean; module: CyberModule }>('/api/admin/modules', {
+    const res = await safeFetchJson<any>('/api/admin/modules', {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify(modData),
     });
-    return data.module;
+    return res?.data?.module || res?.module;
   },
 
   async updateModule(modId: string, modData: Partial<CyberModule>): Promise<CyberModule> {
-    const data = await safeFetchJson<{ success: boolean; module: CyberModule }>(`/api/admin/modules/${encodeURIComponent(modId)}`, {
+    const res = await safeFetchJson<any>(`/api/admin/modules/${encodeURIComponent(modId)}`, {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(modData),
     });
-    return data.module;
+    return res?.data?.module || res?.module;
   },
 
   async toggleModule(modId: string): Promise<CyberModule> {
-    const data = await safeFetchJson<{ success: boolean; module: CyberModule }>(`/api/admin/modules/${encodeURIComponent(modId)}/toggle`, {
+    const res = await safeFetchJson<any>(`/api/admin/modules/${encodeURIComponent(modId)}/toggle`, {
       method: 'PATCH',
       headers: getAuthHeader(),
     });
-    return data.module;
+    return res?.data?.module || res?.module;
   },
 
   async deleteModule(modId: string): Promise<void> {
-    await safeFetchJson<{ success: boolean; message: string }>(`/api/admin/modules/${encodeURIComponent(modId)}`, {
+    await safeFetchJson<any>(`/api/admin/modules/${encodeURIComponent(modId)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
@@ -370,100 +432,100 @@ export const apiClient = {
   // ADMIN: ORDERS & LICENSES
   // ==========================================
   async getOrders(): Promise<AdminOrder[]> {
-    const data = await safeFetchJson<{ orders: AdminOrder[] }>('/api/admin/orders', {
+    const res = await safeFetchJson<any>('/api/admin/orders', {
       headers: getAuthHeader(),
     });
-    return data.orders;
+    return res?.data?.orders || res?.orders || [];
   },
 
   async updateOrderStatus(orderId: string, status: string): Promise<AdminOrder> {
-    const data = await safeFetchJson<{ success: boolean; order: AdminOrder }>(`/api/admin/orders/${encodeURIComponent(orderId)}/status`, {
+    const res = await safeFetchJson<any>(`/api/admin/orders/${encodeURIComponent(orderId)}/status`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ status }),
     });
-    return data.order;
+    return res?.data?.order || res?.order;
   },
 
   async getLicenses(): Promise<AdminLicense[]> {
-    const data = await safeFetchJson<{ licenses: AdminLicense[] }>('/api/admin/licenses', {
+    const res = await safeFetchJson<any>('/api/admin/licenses', {
       headers: getAuthHeader(),
     });
-    return data.licenses;
+    return res?.data?.licenses || res?.licenses || [];
   },
 
   async createLicense(licenseData: { userId: string; moduleId: string; planId?: string; durationDays: number }): Promise<AdminLicense> {
-    const data = await safeFetchJson<{ success: boolean; license: AdminLicense }>('/api/admin/licenses', {
+    const res = await safeFetchJson<any>('/api/admin/licenses', {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify(licenseData),
     });
-    return data.license;
+    return res?.data?.license || res?.license;
   },
 
   async updateLicenseStatus(licenseId: string, status: 'active' | 'revoked' | 'expired'): Promise<AdminLicense> {
-    const data = await safeFetchJson<{ success: boolean; license: AdminLicense }>(`/api/admin/licenses/${encodeURIComponent(licenseId)}/status`, {
+    const res = await safeFetchJson<any>(`/api/admin/licenses/${encodeURIComponent(licenseId)}/status`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ status }),
     });
-    return data.license;
+    return res?.data?.license || res?.license;
   },
 
   async extendLicense(licenseId: string, extraDays: number): Promise<AdminLicense> {
-    const data = await safeFetchJson<{ success: boolean; license: AdminLicense }>(`/api/admin/licenses/${encodeURIComponent(licenseId)}/extend`, {
+    const res = await safeFetchJson<any>(`/api/admin/licenses/${encodeURIComponent(licenseId)}/extend`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ extraDays }),
     });
-    return data.license;
+    return res?.data?.license || res?.license;
   },
 
   // ==========================================
   // SESSIONS & LOGS & SETTINGS
   // ==========================================
   async getSessions(): Promise<AdminSession[]> {
-    const data = await safeFetchJson<{ sessions: AdminSession[] }>('/api/admin/sessions', {
+    const res = await safeFetchJson<any>('/api/admin/sessions', {
       headers: getAuthHeader(),
     });
-    return data.sessions;
+    return res?.data?.sessions || res?.sessions || [];
   },
 
   async revokeSession(token: string): Promise<void> {
-    await safeFetchJson<{ success: boolean }>(`/api/admin/sessions/${encodeURIComponent(token)}`, {
+    await safeFetchJson<any>(`/api/admin/sessions/${encodeURIComponent(token)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
   },
 
   async revokeAllSessions(): Promise<number> {
-    const data = await safeFetchJson<{ success: boolean; revokedCount: number }>('/api/admin/sessions/revoke-all', {
+    const res = await safeFetchJson<any>('/api/admin/sessions/revoke-all', {
       method: 'POST',
       headers: getAuthHeader(),
     });
-    return data.revokedCount;
+    return res?.data?.revokedCount || res?.revokedCount || 0;
   },
 
   async getLogs(limit = 100): Promise<AdminActivityLog[]> {
-    const data = await safeFetchJson<{ logs: AdminActivityLog[] }>(`/api/admin/logs?limit=${limit}`, {
+    const res = await safeFetchJson<any>(`/api/admin/logs?limit=${limit}`, {
       headers: getAuthHeader(),
     });
-    return data.logs;
+    return res?.data?.logs || res?.logs || [];
   },
 
   async getSettings(): Promise<SystemSettingsData> {
-    const data = await safeFetchJson<{ settings: SystemSettingsData }>('/api/admin/settings', {
+    const res = await safeFetchJson<any>('/api/admin/settings', {
       headers: getAuthHeader(),
     });
-    return data.settings;
+    return res?.data?.settings || res?.settings;
   },
 
   async updateSettings(settings: Partial<SystemSettingsData>): Promise<SystemSettingsData> {
-    const data = await safeFetchJson<{ success: boolean; settings: SystemSettingsData }>('/api/admin/settings', {
+    const res = await safeFetchJson<any>('/api/admin/settings', {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(settings),
     });
-    return data.settings;
+    return res?.data?.settings || res?.settings;
   },
 };

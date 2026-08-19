@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { SystemSettingsData } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminSettingsTabProps {
   settings: SystemSettingsData | null;
@@ -37,8 +38,8 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
       setSavedSuccess(true);
       onRefresh();
       setTimeout(() => setSavedSuccess(false), 3000);
-    } catch (err: any) {
-      alert(err.message || 'Failed to update system settings');
+    } catch (err: unknown) {
+      alert(extractErrorMessage(err, 'Failed to update system settings'));
     } finally {
       setSaving(false);
     }
