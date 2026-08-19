@@ -419,7 +419,7 @@ apiRouter.post('/admin/users', requireAdmin, (req: AuthenticatedRequest, res: Re
 });
 
 // POST /api/admin/users/:id/reset-password
-apiRouter.post('/api/admin/users/:id/reset-password', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/admin/users/:id/reset-password', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   const { newPassKey } = req.body;
   const generatedKey = (newPassKey || aegisDb.generateSecurePassKey()).trim();
   
@@ -436,7 +436,7 @@ apiRouter.post('/api/admin/users/:id/reset-password', requireAdmin, (req: Authen
 });
 
 // DELETE /api/admin/users/:id
-apiRouter.delete('/api/admin/users/:id', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.delete('/admin/users/:id', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   const ok = aegisDb.deleteUser(req.params.id, req.userSession!.username);
   if (!ok) {
     return res.status(404).json({ error: 'User account not found' });
@@ -445,7 +445,7 @@ apiRouter.delete('/api/admin/users/:id', requireAdmin, (req: AuthenticatedReques
 });
 
 // PATCH /api/admin/users/:id/status
-apiRouter.patch('/api/admin/users/:id/status', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.patch('/admin/users/:id/status', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
   const { status } = req.body;
   if (status !== 'active' && status !== 'disabled') {
     return res.status(400).json({ error: 'Status must be active or disabled' });

@@ -6,15 +6,68 @@ import {
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('aegis_admin_token') || localStorage.getItem('aegis_auth_token');
-  if (token) {
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
-  }
-  return {
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
     'Content-Type': 'application/json',
   };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+/**
+ * Robust JSON Fetcher
+ * Safely parses server responses and prevents "Unexpected token < or T in JSON"
+ * when a non-JSON / HTML error response is received.
+ */
+async function safeFetchJson<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const headers = {
+    'Accept': 'application/json',
+    ...(options.headers || {}),
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(url, { ...options, headers });
+  } catch (netErr: any) {
+    console.error(`[NETWORK ERROR] Failed to fetch ${url}:`, netErr);
+    throw new Error(`Network connection error: ${netErr.message || 'Unable to reach server'}`);
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
+  if (!isJson) {
+    const rawText = await res.text();
+    // Debug log without exposing user secrets
+    console.warn(`[API NON-JSON RESPONSE] ${options.method || 'GET'} ${url}`, {
+      status: res.status,
+      statusText: res.statusText,
+      contentType,
+      bodyPreview: rawText.slice(0, 160),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Server returned error status ${res.status} (${res.statusText || 'Non-JSON'})`);
+    }
+    throw new Error(`Unexpected non-JSON response from server (${contentType || 'unknown type'})`);
+  }
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch (jsonErr: any) {
+    console.error(`[JSON PARSE ERROR] Failed to parse JSON from ${url}:`, jsonErr);
+    throw new Error('Malformed JSON received from server');
+  }
+
+  if (!res.ok) {
+    const errorMessage = data?.error || data?.message || `Request failed with status ${res.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return data as T;
 }
 
 export const apiClient = {
@@ -29,50 +82,44 @@ export const apiClient = {
   // ==========================================
   // AUTH
   // ==========================================
-  async login(username: string, passKey: string): Promise<{ token: string; user: UserProfile }> {
-    const res = await fetch('/api/auth/login', {
+  async login(username: string, passKey: string): Promise<{ success: boolean; token: string; user: UserProfile }> {
+    const data = await safeFetchJson<{ success: boolean; token: string; user: UserProfile }>('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, passKey }),
+      body: JSON.stringify({ username, passKey, authorisedId: username }),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Authentication failed');
+
+    if (data.token) {
+      localStorage.setItem('aegis_auth_token', data.token);
+      if (data.user.role === 'admin') {
+        localStorage.setItem('aegis_admin_token', data.token);
+      }
     }
-    localStorage.setItem('aegis_auth_token', data.token);
-    if (data.user.role === 'admin') {
+    return data;
+  },
+
+  async adminLogin(username: string, password: string): Promise<{ success: boolean; token: string; user: any }> {
+    const data = await safeFetchJson<{ success: boolean; token: string; user: any }>('/api/auth/admin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (data.token) {
       localStorage.setItem('aegis_admin_token', data.token);
     }
     return data;
   },
 
-  async adminLogin(username: string, password: string): Promise<{ token: string; user: any }> {
-    const res = await fetch('/api/auth/admin-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Admin login failed');
-    }
-    localStorage.setItem('aegis_admin_token', data.token);
-    return data;
-  },
-
   async getMe(): Promise<{ user: UserProfile; licenses: AdminLicense[]; customPricing: UserCustomPricing | null }> {
-    const res = await fetch('/api/auth/me', {
+    return safeFetchJson<{ user: UserProfile; licenses: AdminLicense[]; customPricing: UserCustomPricing | null }>('/api/auth/me', {
       headers: getAuthHeader(),
     });
-    if (!res.ok) {
-      throw new Error('Failed to fetch profile');
-    }
-    return res.json();
   },
 
   async logout(): Promise<void> {
     try {
-      await fetch('/api/auth/logout', {
+      await safeFetchJson('/api/auth/logout', {
         method: 'POST',
         headers: getAuthHeader(),
       });
@@ -95,36 +142,29 @@ export const apiClient = {
     settings: any;
   }> {
     const url = userId ? `/api/portal/config?userId=${encodeURIComponent(userId)}` : '/api/portal/config';
-    const res = await fetch(url, {
+    return safeFetchJson<{
+      modules: CyberModule[];
+      plans: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[];
+      userLicenses: AdminLicense[];
+      upiQrImage: string;
+      settings: any;
+    }>(url, {
       headers: getAuthHeader(),
     });
-    if (!res.ok) {
-      throw new Error('Failed to load portal configuration');
-    }
-    return res.json();
   },
 
   async createOrder(userId: string, moduleId: string, planId: string): Promise<{ order: AdminOrder; upiQrImageUrl: string }> {
-    const res = await fetch('/api/portal/orders', {
+    return safeFetchJson<{ order: AdminOrder; upiQrImageUrl: string }>('/api/portal/orders', {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify({ userId, moduleId, planId }),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to create order');
-    }
-    return data;
   },
 
   async getOrder(orderId: string): Promise<AdminOrder> {
-    const res = await fetch(`/api/portal/orders/${orderId}`, {
+    const data = await safeFetchJson<{ order: AdminOrder }>(`/api/portal/orders/${encodeURIComponent(orderId)}`, {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error('Failed to fetch order');
-    }
     return data.order;
   },
 
@@ -137,13 +177,14 @@ export const apiClient = {
     recentLogs: AdminActivityLog[];
     activeSessionsCount: number;
   }> {
-    const res = await fetch('/api/admin/overview', {
+    return safeFetchJson<{
+      stats: AdminOverviewStats;
+      recentOrders: AdminOrder[];
+      recentLogs: AdminActivityLog[];
+      activeSessionsCount: number;
+    }>('/api/admin/overview', {
       headers: getAuthHeader(),
     });
-    if (!res.ok) {
-      throw new Error('Failed to load admin overview');
-    }
-    return res.json();
   },
 
   // ==========================================
@@ -151,25 +192,16 @@ export const apiClient = {
   // ==========================================
   async getUsers(search?: string): Promise<AdminUser[]> {
     const url = search ? `/api/admin/users?search=${encodeURIComponent(search)}` : '/api/admin/users';
-    const res = await fetch(url, {
+    const data = await safeFetchJson<{ users: AdminUser[] }>(url, {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to load users');
-    }
     return data.users;
   },
 
   async generateCredentials(): Promise<{ authorisedId: string; passKey: string }> {
-    const res = await fetch('/api/admin/users/generate-credentials', {
+    return safeFetchJson<{ authorisedId: string; passKey: string }>('/api/admin/users/generate-credentials', {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to generate credentials');
-    }
-    return data;
   },
 
   async createUser(userData: {
@@ -192,61 +224,41 @@ export const apiClient = {
     initialPlanId?: string;
     initialDurationDays?: number;
   }): Promise<{ user: AdminUser; createdCredentials: { authorisedId: string; passKey: string }; initialLicense?: any }> {
-    const res = await fetch('/api/admin/users', {
+    return safeFetchJson<{ user: AdminUser; createdCredentials: { authorisedId: string; passKey: string }; initialLicense?: any }>('/api/admin/users', {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify(userData),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to create user');
-    }
-    return data;
   },
 
   async resetUserPassword(userId: string, newPassKey?: string): Promise<{ success: boolean; message: string; newPassKey: string }> {
-    const res = await fetch(`/api/admin/users/${userId}/reset-password`, {
+    return safeFetchJson<{ success: boolean; message: string; newPassKey: string }>(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify({ newPassKey }),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to reset pass key');
-    }
-    return data;
   },
 
   async deleteUser(userId: string): Promise<{ success: boolean; message: string }> {
-    const res = await fetch(`/api/admin/users/${userId}`, {
+    return safeFetchJson<{ success: boolean; message: string }>(`/api/admin/users/${encodeURIComponent(userId)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to delete user');
-    }
-    return data;
   },
 
   async updateUserStatus(userId: string, status: 'active' | 'disabled'): Promise<void> {
-    const res = await fetch(`/api/admin/users/${userId}/status`, {
+    await safeFetchJson<{ success: boolean }>(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ status }),
     });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Failed to update user status');
-    }
   },
 
   async resetUserSessions(userId: string): Promise<number> {
-    const res = await fetch(`/api/admin/users/${userId}/reset-sessions`, {
+    const data = await safeFetchJson<{ success: boolean; revokedCount: number }>(`/api/admin/users/${encodeURIComponent(userId)}/reset-sessions`, {
       method: 'POST',
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.revokedCount;
   },
 
@@ -254,11 +266,9 @@ export const apiClient = {
   // ADMIN: INDIVIDUAL USER PRICING (KEY)
   // ==========================================
   async getCustomPricings(): Promise<{ customPricings: UserCustomPricing[]; globalPlans: AdminRuntimePlan[] }> {
-    const res = await fetch('/api/admin/pricing', {
+    return safeFetchJson<{ customPricings: UserCustomPricing[]; globalPlans: AdminRuntimePlan[] }>('/api/admin/pricing', {
       headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error('Failed to load custom pricings');
-    return res.json();
   },
 
   async getUserPricingDetails(userId: string): Promise<{
@@ -266,54 +276,50 @@ export const apiClient = {
     customPricing: UserCustomPricing | null;
     effectivePlans: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[];
   }> {
-    const res = await fetch(`/api/admin/pricing/${userId}`, {
+    return safeFetchJson<{
+      userId: string;
+      customPricing: UserCustomPricing | null;
+      effectivePlans: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean })[];
+    }>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
       headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error('Failed to load user pricing');
-    return res.json();
   },
 
   async saveCustomPricing(
     userId: string,
     prices: { plan15Price: number; plan20Price: number; plan30Price: number; planPermPrice: number }
   ): Promise<UserCustomPricing> {
-    const res = await fetch(`/api/admin/pricing/${userId}`, {
+    const data = await safeFetchJson<{ success: boolean; customPricing: UserCustomPricing }>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(prices),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to save custom pricing');
     return data.customPricing;
   },
 
   async resetCustomPricing(userId: string): Promise<void> {
-    const res = await fetch(`/api/admin/pricing/${userId}`, {
+    await safeFetchJson<{ success: boolean; reset: boolean }>(`/api/admin/pricing/${encodeURIComponent(userId)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error('Failed to reset custom pricing');
   },
 
   // ==========================================
   // ADMIN: RUNTIME PLANS
   // ==========================================
   async getRuntimePlans(): Promise<AdminRuntimePlan[]> {
-    const res = await fetch('/api/admin/plans', {
+    const data = await safeFetchJson<{ plans: AdminRuntimePlan[] }>('/api/admin/plans', {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.plans;
   },
 
   async updateRuntimePlan(planId: string, planData: Partial<AdminRuntimePlan>): Promise<AdminRuntimePlan> {
-    const res = await fetch(`/api/admin/plans/${planId}`, {
+    const data = await safeFetchJson<{ success: boolean; plan: AdminRuntimePlan }>(`/api/admin/plans/${encodeURIComponent(planId)}`, {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(planData),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to update plan');
     return data.plan;
   },
 
@@ -321,113 +327,95 @@ export const apiClient = {
   // ADMIN: MODULES
   // ==========================================
   async getModules(): Promise<CyberModule[]> {
-    const res = await fetch('/api/admin/modules', {
+    const data = await safeFetchJson<{ modules: CyberModule[] }>('/api/admin/modules', {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.modules;
   },
 
   async createModule(modData: Partial<CyberModule>): Promise<CyberModule> {
-    const res = await fetch('/api/admin/modules', {
+    const data = await safeFetchJson<{ success: boolean; module: CyberModule }>('/api/admin/modules', {
       method: 'POST',
       headers: getAuthHeader(),
       body: JSON.stringify(modData),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to create module');
     return data.module;
   },
 
   async updateModule(modId: string, modData: Partial<CyberModule>): Promise<CyberModule> {
-    const res = await fetch(`/api/admin/modules/${modId}`, {
+    const data = await safeFetchJson<{ success: boolean; module: CyberModule }>(`/api/admin/modules/${encodeURIComponent(modId)}`, {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(modData),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to update module');
     return data.module;
   },
 
   async toggleModule(modId: string): Promise<CyberModule> {
-    const res = await fetch(`/api/admin/modules/${modId}/toggle`, {
+    const data = await safeFetchJson<{ success: boolean; module: CyberModule }>(`/api/admin/modules/${encodeURIComponent(modId)}/toggle`, {
       method: 'PATCH',
       headers: getAuthHeader(),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to toggle module');
     return data.module;
   },
 
   async deleteModule(modId: string): Promise<void> {
-    const res = await fetch(`/api/admin/modules/${modId}`, {
+    await safeFetchJson<{ success: boolean; message: string }>(`/api/admin/modules/${encodeURIComponent(modId)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error('Failed to delete module');
   },
 
   // ==========================================
   // ADMIN: ORDERS & LICENSES
   // ==========================================
   async getOrders(): Promise<AdminOrder[]> {
-    const res = await fetch('/api/admin/orders', {
+    const data = await safeFetchJson<{ orders: AdminOrder[] }>('/api/admin/orders', {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.orders;
   },
 
   async updateOrderStatus(orderId: string, status: string): Promise<AdminOrder> {
-    const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+    const data = await safeFetchJson<{ success: boolean; order: AdminOrder }>(`/api/admin/orders/${encodeURIComponent(orderId)}/status`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ status }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to update order status');
     return data.order;
   },
 
   async getLicenses(): Promise<AdminLicense[]> {
-    const res = await fetch('/api/admin/licenses', {
+    const data = await safeFetchJson<{ licenses: AdminLicense[] }>('/api/admin/licenses', {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.licenses;
   },
 
-  async createLicense(data: { userId: string; moduleId: string; planId?: string; durationDays: number }): Promise<AdminLicense> {
-    const res = await fetch('/api/admin/licenses', {
+  async createLicense(licenseData: { userId: string; moduleId: string; planId?: string; durationDays: number }): Promise<AdminLicense> {
+    const data = await safeFetchJson<{ success: boolean; license: AdminLicense }>('/api/admin/licenses', {
       method: 'POST',
       headers: getAuthHeader(),
-      body: JSON.stringify(data),
+      body: JSON.stringify(licenseData),
     });
-    const resData = await res.json();
-    if (!res.ok) throw new Error(resData.error || 'Failed to grant license');
-    return resData.license;
+    return data.license;
   },
 
   async updateLicenseStatus(licenseId: string, status: 'active' | 'revoked' | 'expired'): Promise<AdminLicense> {
-    const res = await fetch(`/api/admin/licenses/${licenseId}/status`, {
+    const data = await safeFetchJson<{ success: boolean; license: AdminLicense }>(`/api/admin/licenses/${encodeURIComponent(licenseId)}/status`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ status }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to update license status');
     return data.license;
   },
 
   async extendLicense(licenseId: string, extraDays: number): Promise<AdminLicense> {
-    const res = await fetch(`/api/admin/licenses/${licenseId}/extend`, {
+    const data = await safeFetchJson<{ success: boolean; license: AdminLicense }>(`/api/admin/licenses/${encodeURIComponent(licenseId)}/extend`, {
       method: 'PATCH',
       headers: getAuthHeader(),
       body: JSON.stringify({ extraDays }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to extend license');
     return data.license;
   },
 
@@ -435,53 +423,47 @@ export const apiClient = {
   // SESSIONS & LOGS & SETTINGS
   // ==========================================
   async getSessions(): Promise<AdminSession[]> {
-    const res = await fetch('/api/admin/sessions', {
+    const data = await safeFetchJson<{ sessions: AdminSession[] }>('/api/admin/sessions', {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.sessions;
   },
 
   async revokeSession(token: string): Promise<void> {
-    const res = await fetch(`/api/admin/sessions/${encodeURIComponent(token)}`, {
+    await safeFetchJson<{ success: boolean }>(`/api/admin/sessions/${encodeURIComponent(token)}`, {
       method: 'DELETE',
       headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error('Failed to revoke session');
   },
 
   async revokeAllSessions(): Promise<number> {
-    const res = await fetch('/api/admin/sessions/revoke-all', {
+    const data = await safeFetchJson<{ success: boolean; revokedCount: number }>('/api/admin/sessions/revoke-all', {
       method: 'POST',
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.revokedCount;
   },
 
   async getLogs(limit = 100): Promise<AdminActivityLog[]> {
-    const res = await fetch(`/api/admin/logs?limit=${limit}`, {
+    const data = await safeFetchJson<{ logs: AdminActivityLog[] }>(`/api/admin/logs?limit=${limit}`, {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.logs;
   },
 
   async getSettings(): Promise<SystemSettingsData> {
-    const res = await fetch('/api/admin/settings', {
+    const data = await safeFetchJson<{ settings: SystemSettingsData }>('/api/admin/settings', {
       headers: getAuthHeader(),
     });
-    const data = await res.json();
     return data.settings;
   },
 
   async updateSettings(settings: Partial<SystemSettingsData>): Promise<SystemSettingsData> {
-    const res = await fetch('/api/admin/settings', {
+    const data = await safeFetchJson<{ success: boolean; settings: SystemSettingsData }>('/api/admin/settings', {
       method: 'PUT',
       headers: getAuthHeader(),
       body: JSON.stringify(settings),
     });
-    const data = await res.json();
     return data.settings;
   },
 };
