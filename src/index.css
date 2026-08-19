@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --cyber-glow-cyan: rgba(0, 242, 254, 0.4);
+    --cyber-cyan-500: #00f2fe;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+}
+
+/* Custom Cyber Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090c15;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0ea5e9;
+}
+
+/* Cyber Metallic Border & Card Shimmers */
+.cyber-glass {
+  background: rgba(10, 14, 23, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cyber-card-glow {
+  position: relative;
+}
+.cyber-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.35), rgba(255, 255, 255, 0.04) 40%, rgba(14, 165, 233, 0.25) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.cyber-badge-glow {
+  box-shadow: 0 0 20px -3px rgba(0, 242, 254, 0.25), inset 0 0 12px -2px rgba(0, 242, 254, 0.15);
+}
+
+.cyber-button-glow {
+  box-shadow: 0 0 25px -4px rgba(0, 242, 254, 0.45);
+}
+
+/* Subtle Cyber Grid Background */
+.cyber-grid-pattern {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+}
+
+/* Scanline Overlay (Lightweight) */
+.cyber-scanlines {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
+}
+
+/* Monospace font shortcuts */
+.font-mono-code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.font-display {
+  font-family: 'Rajdhani', sans-serif;
+}
+

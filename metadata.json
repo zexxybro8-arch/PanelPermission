@@ -1,0 +1,6 @@
+{
+  "name": "Cyber Gate - 3D Security Portal",
+  "description": "Ultra-premium dark futuristic cyber-security login and gateway interface with an interactive 3D particle network, WebAuthn & biometric auth simulation, Telegram updates banner, and live security telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
