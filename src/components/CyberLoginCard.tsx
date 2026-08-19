@@ -18,7 +18,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   onLoginSuccess,
   selectedRegion,
 }) => {
-  // Empty initial React states on page load (no pre-filled credentials)
+  // Empty initial React states on page load (strict authentication lock)
   const [operatorId, setOperatorId] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -51,10 +51,11 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
 
   const entropy = calculateEntropy(passphrase);
 
-  // Execute Main Authentication Flow
+  // Execute Strict Authentication Flow
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Human Proof of Work Verification check
     if (!isPoWVerified) {
       cyberAudio.playError();
       setAuthStep('error');
@@ -63,27 +64,18 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
       return;
     }
 
-    const trimmedId = operatorId.trim();
-    if (!trimmedId || !passphrase) {
+    // Strict exact case-sensitive credential check: ADMINXD / ADMIN5921N
+    const isAuthorized = operatorId === 'ADMINXD' && passphrase === 'ADMIN5921N';
+
+    if (!isAuthorized) {
       cyberAudio.playError();
       setAuthStep('error');
-      setAuthStatusMessage('INVALID CREDENTIALS: Username and passphrase required');
-      setTimeout(() => setAuthStep('idle'), 2500);
+      setAuthStatusMessage('ACCESS DENIED — INVALID CREDENTIALS');
+      setTimeout(() => setAuthStep('idle'), 3000);
       return;
     }
 
-    // Demo credentials check (ANGRYMOD / ANGRY490)
-    const isDemoMatch = (trimmedId.toUpperCase() === 'ANGRYMOD' && passphrase === 'ANGRY490') ||
-                        (trimmedId.length > 0 && passphrase.length >= 4);
-
-    if (!isDemoMatch) {
-      cyberAudio.playError();
-      setAuthStep('error');
-      setAuthStatusMessage('ACCESS DENIED: Invalid cipher token or operator ID');
-      setTimeout(() => setAuthStep('idle'), 2500);
-      return;
-    }
-
+    // Success path: Proceed with cryptographic handshake animation
     cyberAudio.playScan();
     setAuthStep('hashing');
     setAuthStatusMessage('HASHING SHA-512 MATRIX...');
@@ -117,17 +109,17 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
         // ignore
       }
 
-      // Transition to Dashboard
+      // Transition to Protected Dashboard
       setTimeout(() => {
         const user: UserProfile = {
-          username: trimmedId || 'ANGRYMOD',
-          codename: trimmedId.toUpperCase() === 'ANGRYMOD' ? 'ANGRYMOD_PRIME' : `${trimmedId.toUpperCase()}_OPERATOR`,
+          username: 'ADMINXD',
+          codename: 'ADMINXD_ROOT',
           clearanceLevel: 5,
           role: 'Lead Cryptographic Architect',
           terminalId: `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
           ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
           nodeRegion: selectedRegion,
-          avatarSeed: trimmedId,
+          avatarSeed: 'ADMINXD',
           sessionToken: `AEGIS-${Date.now().toString(16).toUpperCase()}-QKEY`,
           loginTime: new Date().toISOString(),
         };
@@ -326,7 +318,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
               {authStep === 'error' && (
                 <>
                   <AlertCircle className="w-4 h-4 text-rose-950" />
-                  <span className="text-rose-950">{authStatusMessage}</span>
+                  <span className="text-rose-950 font-bold">{authStatusMessage}</span>
                 </>
               )}
             </button>
