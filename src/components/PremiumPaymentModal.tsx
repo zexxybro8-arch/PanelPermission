@@ -1,11 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ShieldAlert, Lock, ArrowLeft, X, Check, ShieldCheck, 
-  CreditCard, QrCode, Sparkles, AlertCircle, RefreshCw
+  Lock, ArrowLeft, X, ShieldCheck, 
+  QrCode, Sparkles, RefreshCw, Zap, AlertCircle, Clock, CheckCircle2
 } from 'lucide-react';
 import { CyberModule } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
+
+interface RuntimePlan {
+  id: string;
+  name: string;
+  price: string;
+  numericPrice: number;
+  badge?: string;
+  isPopular?: boolean;
+}
+
+const RUNTIME_PLANS: RuntimePlan[] = [
+  {
+    id: 'plan-15',
+    name: '15 DAYS RUNTIME',
+    price: '₹120',
+    numericPrice: 120,
+    badge: 'BASIC',
+  },
+  {
+    id: 'plan-20',
+    name: '20 DAYS RUNTIME',
+    price: '₹135',
+    numericPrice: 135,
+    badge: 'STANDARD',
+  },
+  {
+    id: 'plan-30',
+    name: '30 DAYS RUNTIME',
+    price: '₹150',
+    numericPrice: 150,
+    badge: 'RECOMMENDED',
+    isPopular: true,
+  },
+  {
+    id: 'plan-perm',
+    name: 'PERMANENT RUNTIME',
+    price: '₹200',
+    numericPrice: 200,
+    badge: 'LIFETIME',
+  },
+];
+
+const PAYMENT_QR_IMAGE_URL = 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg';
+const INITIAL_TIMER_SECONDS = 300; // 5 minutes
 
 interface PremiumPaymentModalProps {
   module: CyberModule | null;
@@ -18,44 +62,81 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [checkoutStep, setCheckoutStep] = useState<'prompt' | 'simulated_gateway' | 'simulated_complete'>('prompt');
-  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'crypto'>('upi');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<RuntimePlan>(RUNTIME_PLANS[2]);
+  const [checkoutStep, setCheckoutStep] = useState<'plans' | 'method' | 'qr_payment'>('plans');
+  const [timeLeft, setTimeLeft] = useState<number>(INITIAL_TIMER_SECONDS);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+
+  // Real-time 5:00 countdown timer for active QR payment session
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isOpen && checkoutStep === 'qr_payment' && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isOpen, checkoutStep, timeLeft]);
 
   if (!isOpen || !module) return null;
 
   const handleClose = () => {
     cyberAudio.playClick(900);
-    setCheckoutStep('prompt');
-    setIsProcessing(false);
+    setCheckoutStep('plans');
+    setTimeLeft(INITIAL_TIMER_SECONDS);
+    setIsVerifying(false);
+    setVerificationStatus(null);
     onClose();
   };
 
-  const handleProceedToPayment = () => {
+  const handleSelectAndPay = (plan: RuntimePlan) => {
     cyberAudio.playClick(1300);
-    setCheckoutStep('simulated_gateway');
+    setSelectedPlan(plan);
+    setCheckoutStep('method');
   };
 
-  const handleSimulatePayment = () => {
+  const handleProceedToQR = () => {
+    cyberAudio.playClick(1400);
+    setTimeLeft(INITIAL_TIMER_SECONDS);
+    setVerificationStatus(null);
+    setCheckoutStep('qr_payment');
+  };
+
+  const handleStartNewPayment = () => {
+    cyberAudio.playClick(1100);
+    setTimeLeft(INITIAL_TIMER_SECONDS);
+    setVerificationStatus(null);
+  };
+
+  const handleCheckPaymentStatus = () => {
     cyberAudio.playScan();
-    setIsProcessing(true);
+    setIsVerifying(true);
+    setVerificationStatus(null);
+
+    // Ready for backend verification integration
     setTimeout(() => {
-      setIsProcessing(false);
-      setCheckoutStep('simulated_complete');
-      cyberAudio.playAccessGranted();
+      setIsVerifying(false);
+      setVerificationStatus('Awaiting gateway network confirmation. Please complete the transfer on your UPI app.');
     }, 1500);
   };
 
+  // Format MM:SS
+  const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const seconds = (timeLeft % 60).toString().padStart(2, '0');
+  const formattedTimer = `${minutes}:${seconds}`;
+  const isExpired = timeLeft === 0;
+
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
         {/* Dark Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={handleClose}
-          className="absolute inset-0 bg-[#04060a]/80 backdrop-blur-md"
+          className="fixed inset-0 bg-[#04060a]/85 backdrop-blur-md"
         />
 
         {/* Modal Window */}
@@ -64,22 +145,24 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 15 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="relative w-full max-w-lg rounded-3xl cyber-glass border border-cyan-500/30 p-6 sm:p-8 shadow-[0_0_60px_-10px_rgba(0,242,254,0.35)] overflow-hidden"
+          className="relative w-full max-w-xl my-8 rounded-3xl cyber-glass border border-cyan-500/30 p-5 sm:p-7 shadow-[0_0_60px_-10px_rgba(0,242,254,0.35)] overflow-hidden z-10"
           style={{
-            background: 'linear-gradient(145deg, rgba(13, 19, 32, 0.95) 0%, rgba(7, 10, 18, 0.98) 100%)',
+            background: 'linear-gradient(145deg, rgba(13, 19, 32, 0.96) 0%, rgba(7, 10, 18, 0.98) 100%)',
           }}
         >
-          {/* Top Glowing Metallic Line */}
+          {/* Top Glowing Metallic Accent Strip */}
           <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_12px_#00f2fe]" />
 
-          {/* Ambient Glows */}
+          {/* Subtle Ambient Glows */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
 
-          {/* Step 1: Standard Paywall Prompt */}
-          {checkoutStep === 'prompt' && (
-            <div className="space-y-6">
-              {/* Header with Back/Close */}
+          {/* ========================================================================= */}
+          {/* STEP 1: RUNTIME PLAN SELECTION                                            */}
+          {/* ========================================================================= */}
+          {checkoutStep === 'plans' && (
+            <div className="space-y-5">
+              {/* Header Navigation */}
               <div className="flex items-center justify-between">
                 <button
                   type="button"
@@ -90,6 +173,148 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                   <span>BACK</span>
                 </button>
 
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 tracking-wider">
+                    RUNTIME SELECTION
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Title & Module Overview */}
+              <div className="text-center space-y-1.5 pt-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono-code font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>SELECT RUNTIME PLAN</span>
+                </div>
+                <h2 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wider">
+                  {module.name}
+                </h2>
+                <p className="text-xs font-mono-code text-slate-400 max-w-md mx-auto">
+                  Choose a runtime duration to authorize and dispatch the module.
+                </p>
+              </div>
+
+              {/* 4 Runtime Plans List */}
+              <div className="space-y-2.5 pt-1">
+                {RUNTIME_PLANS.map((plan) => {
+                  const isSelected = selectedPlan.id === plan.id;
+
+                  return (
+                    <div
+                      key={plan.id}
+                      onClick={() => {
+                        cyberAudio.playClick(1000);
+                        setSelectedPlan(plan);
+                      }}
+                      className={`p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden group ${
+                        isSelected
+                          ? 'bg-cyan-950/40 border-cyan-400/80 shadow-[0_0_20px_-5px_rgba(0,242,254,0.3)]'
+                          : 'bg-slate-950/70 border-slate-800/90 hover:border-slate-700 hover:bg-slate-900/60'
+                      }`}
+                    >
+                      {/* Left Side: Plan Duration & Badge */}
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
+                            isSelected
+                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                              : 'bg-slate-900 border-slate-800 text-slate-500 group-hover:text-slate-300'
+                          }`}
+                        >
+                          <Zap className="w-4 h-4" />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-display font-bold text-sm sm:text-base text-white tracking-wide">
+                              {plan.name}
+                            </span>
+                            {plan.badge && (
+                              <span
+                                className={`text-[9px] font-mono-code font-bold px-2 py-0.5 rounded-full border ${
+                                  plan.isPopular
+                                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                                }`}
+                              >
+                                {plan.badge}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-mono-code text-slate-400 block">
+                            Direct module access authorization
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Price & PAY Button */}
+                      <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                        <div className="text-right">
+                          <span className="font-display font-extrabold text-lg sm:text-xl text-white tracking-tight block">
+                            {plan.price}
+                          </span>
+                          <span className="text-[9px] font-mono-code text-slate-500 block">INR</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectAndPay(plan);
+                          }}
+                          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-display font-bold text-xs tracking-wider transition-all duration-200 cursor-pointer shadow-md ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-cyan-400 to-sky-300 hover:from-cyan-300 hover:to-sky-200 text-slate-950 shadow-[0_0_15px_rgba(0,242,254,0.4)]'
+                              : 'bg-slate-900 hover:bg-cyan-500/20 text-cyan-300 border border-slate-700 hover:border-cyan-400/50'
+                          }`}
+                        >
+                          PAY
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bottom Cancel Button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-full py-3 px-6 rounded-xl font-mono-code text-xs text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-slate-800 transition-all text-center cursor-pointer"
+                >
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* STEP 2: PAYMENT METHOD SCREEN (UPI QR ONLY)                                */}
+          {/* ========================================================================= */}
+          {checkoutStep === 'method' && (
+            <div className="space-y-5">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    cyberAudio.playClick(900);
+                    setCheckoutStep('plans');
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-mono-code text-slate-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>BACK TO PLANS</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleClose}
@@ -99,59 +324,72 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                 </button>
               </div>
 
-              {/* Lock Badge & Title */}
-              <div className="text-center space-y-3 pt-2">
-                <div className="relative w-16 h-16 mx-auto rounded-2xl bg-cyan-950/80 border border-cyan-400/50 flex items-center justify-center shadow-[0_0_30px_rgba(0,242,254,0.35)]">
-                  <Lock className="w-8 h-8 text-cyan-400 animate-pulse" />
-                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-mono-code font-bold bg-amber-400 text-slate-950">
-                    PASS
-                  </span>
-                </div>
-
-                <div>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 mb-2">
-                    <Sparkles className="w-3 h-3 text-cyan-400" />
-                    PREMIUM ACCESS REQUIRED
-                  </span>
-                  <h2 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wider">
-                    {module.name}
-                  </h2>
-                  <p className="text-sm font-mono-code text-slate-300 mt-2 max-w-sm mx-auto">
-                    This module requires a <span className="text-cyan-300 font-bold">₹200</span> demo access pass.
-                  </p>
-                </div>
+              {/* Summary Card */}
+              <div>
+                <span className="text-[10px] font-mono-code font-bold text-cyan-400 tracking-wider">
+                  CHECKOUT // {module.name}
+                </span>
+                <h3 className="font-display font-bold text-xl sm:text-2xl text-white mt-0.5">
+                  PAYMENT GATEWAY
+                </h3>
               </div>
 
-              {/* Price Banner Card */}
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between shadow-inner">
+              {/* Selected Plan Details Card */}
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/30 flex items-center justify-between shadow-inner">
                 <div>
-                  <span className="text-[11px] font-mono-code text-slate-400 block">DEMO ACCESS LICENSE</span>
-                  <span className="text-xs font-mono-code text-cyan-400 font-semibold">{module.name} • 30-DAY RUNTIME</span>
+                  <span className="text-[10px] font-mono-code text-slate-400 block">SELECTED RUNTIME PLAN</span>
+                  <span className="text-sm font-display font-bold text-cyan-300">{selectedPlan.name}</span>
+                  <span className="text-[11px] font-mono-code text-slate-500 block">{module.name}</span>
                 </div>
 
                 <div className="text-right">
-                  <span className="font-display font-extrabold text-3xl text-white tracking-tight">₹200</span>
-                  <span className="text-[10px] font-mono-code text-slate-500 block">INR DEMO PASS</span>
+                  <span className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+                    {selectedPlan.price}
+                  </span>
+                  <span className="text-[10px] font-mono-code text-slate-400 block">TOTAL AMOUNT</span>
                 </div>
               </div>
 
-              {/* Simulation Disclaimer Notice */}
-              <div className="p-3 rounded-xl bg-cyan-950/25 border border-cyan-500/20 text-[11px] font-mono-code text-slate-400 flex items-start gap-2.5">
-                <ShieldAlert className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong className="text-cyan-300">DEMO SIMULATION NOTICE:</strong> This is a sandboxed interface demonstration. No real currency will be charged or collected.
-                </span>
+              {/* Single Payment Method: UPI QR */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-mono-code text-slate-400 flex items-center justify-between">
+                  <span>PAYMENT METHOD:</span>
+                  <span className="text-cyan-400 font-bold">FAST & SECURE</span>
+                </label>
+
+                <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-400/60 shadow-[0_0_20px_-5px_rgba(0,242,254,0.25)] flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 shrink-0">
+                      <QrCode className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-display font-bold text-sm text-white">UPI QR PAYMENT</span>
+                        <span className="text-[9px] font-mono-code font-bold bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40">
+                          INSTANT
+                        </span>
+                      </div>
+                      <span className="text-xs font-mono-code text-slate-400">
+                        Scan with GPay, PhonePe, Paytm, or any UPI app
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="w-5 h-5 rounded-full bg-cyan-400 flex items-center justify-center shrink-0 shadow-[0_0_10px_#00f2fe]">
+                    <div className="w-2 h-2 rounded-full bg-slate-950" />
+                  </div>
+                </div>
               </div>
 
               {/* Action Buttons */}
               <div className="space-y-2.5 pt-2">
                 <button
                   type="button"
-                  onClick={handleProceedToPayment}
-                  className="w-full py-3.5 px-6 rounded-xl font-display font-bold tracking-widest text-sm text-slate-950 bg-gradient-to-r from-cyan-400 via-sky-300 to-cyan-400 hover:from-cyan-300 hover:to-sky-200 transition-all duration-300 shadow-[0_0_30px_-5px_rgba(0,242,254,0.5)] flex items-center justify-center gap-2 cursor-pointer group"
+                  onClick={handleProceedToQR}
+                  className="w-full py-3.5 px-6 rounded-xl font-display font-bold tracking-widest text-sm text-slate-950 bg-gradient-to-r from-cyan-400 via-sky-300 to-cyan-400 hover:from-cyan-300 hover:to-sky-200 transition-all duration-300 shadow-[0_0_25px_rgba(0,242,254,0.4)] flex items-center justify-center gap-2 cursor-pointer group"
                 >
-                  <ShieldCheck className="w-4 h-4 text-slate-950" />
-                  <span>CONTINUE TO PAYMENT</span>
+                  <ShieldCheck className="w-4 h-4 text-slate-950 font-bold" />
+                  <span>PROCEED TO PAY {selectedPlan.price}</span>
                 </button>
 
                 <button
@@ -165,171 +403,165 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
             </div>
           )}
 
-          {/* Step 2: Simulated Payment Selection Gateway */}
-          {checkoutStep === 'simulated_gateway' && (
-            <div className="space-y-6">
-              {/* Header */}
+          {/* ========================================================================= */}
+          {/* STEP 3: DEDICATED PROFESSIONAL UPI QR PAYMENT SCREEN                       */}
+          {/* ========================================================================= */}
+          {checkoutStep === 'qr_payment' && (
+            <div className="space-y-4 text-center">
+              {/* Header Navigation */}
               <div className="flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => setCheckoutStep('prompt')}
+                  onClick={() => {
+                    cyberAudio.playClick(900);
+                    setCheckoutStep('method');
+                  }}
                   className="flex items-center gap-1.5 text-xs font-mono-code text-slate-400 hover:text-cyan-300 transition-colors cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>BACK TO DETAILS</span>
+                  <span>BACK</span>
                 </button>
+
+                {/* Session Status Indicator */}
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-500/40">
+                    <span className={`w-2 h-2 rounded-full ${isExpired ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`} />
+                    <span>SECURE UPI PAYMENT SESSION</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected Plan Summary Banner */}
+              <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-left">
+                <div>
+                  <span className="text-[10px] font-mono-code text-slate-400 block">{module.name}</span>
+                  <span className="text-xs font-display font-bold text-white">{selectedPlan.name}</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-display font-extrabold text-xl text-cyan-300">{selectedPlan.price}</span>
+                  <span className="text-[9px] font-mono-code text-slate-500 block">INR</span>
+                </div>
+              </div>
+
+              {/* Prominent QR Code Display */}
+              <div className="relative mx-auto max-w-[240px] sm:max-w-[270px]">
+                <div className={`p-3 rounded-2xl bg-slate-950 border transition-all duration-300 ${
+                  isExpired 
+                    ? 'border-rose-500/50 opacity-50 grayscale' 
+                    : 'border-cyan-400/50 shadow-[0_0_30px_rgba(0,242,254,0.3)]'
+                }`}>
+                  <div className="relative rounded-xl overflow-hidden bg-white p-2 flex items-center justify-center">
+                    <img
+                      src={PAYMENT_QR_IMAGE_URL}
+                      alt="UPI Payment QR Code"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-auto max-h-[240px] sm:max-h-[260px] object-contain rounded-lg"
+                    />
+
+                    {isExpired && (
+                      <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center">
+                        <AlertCircle className="w-8 h-8 text-rose-400 mb-1" />
+                        <span className="font-display font-bold text-sm text-rose-300">SESSION EXPIRED</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Corner Accents */}
+                <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-t-2 border-l-2 border-cyan-400" />
+                <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-t-2 border-r-2 border-cyan-400" />
+                <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-b-2 border-l-2 border-cyan-400" />
+                <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-b-2 border-r-2 border-cyan-400" />
+              </div>
+
+              {/* Instructions text */}
+              <div>
+                <h4 className="font-display font-bold text-sm sm:text-base text-white tracking-wider">
+                  SCAN & PAY USING UPI
+                </h4>
+                <p className="text-[11px] font-mono-code text-slate-400 mt-0.5">
+                  Scan the QR code with any UPI application to complete transfer
+                </p>
+              </div>
+
+              {/* Real-time Countdown Timer */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1">
+                <span className="text-[10px] font-mono-code text-slate-400 tracking-wider block">
+                  PAYMENT SESSION EXPIRES IN
+                </span>
+
+                <div className="flex items-center justify-center gap-2">
+                  <Clock className={`w-4 h-4 ${isExpired ? 'text-rose-400' : 'text-cyan-400 animate-pulse'}`} />
+                  <span className={`font-display font-extrabold text-2xl sm:text-3xl tracking-widest ${
+                    isExpired ? 'text-rose-400' : timeLeft <= 60 ? 'text-amber-400' : 'text-cyan-300'
+                  }`}>
+                    {formattedTimer}
+                  </span>
+                </div>
+
+                {isExpired && (
+                  <div className="text-xs font-mono-code font-bold text-rose-400 pt-1">
+                    PAYMENT SESSION EXPIRED
+                  </div>
+                )}
+              </div>
+
+              {/* Verification Feedback Banner if triggered */}
+              {verificationStatus && (
+                <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-xs font-mono-code text-cyan-300 text-left flex items-start gap-2">
+                  <RefreshCw className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <span>{verificationStatus}</span>
+                </div>
+              )}
+
+              {/* Action Controls */}
+              <div className="space-y-2.5 pt-1">
+                {isExpired ? (
+                  <button
+                    type="button"
+                    onClick={handleStartNewPayment}
+                    className="w-full py-3.5 px-6 rounded-xl font-display font-bold tracking-widest text-sm text-slate-950 bg-gradient-to-r from-amber-400 to-orange-300 hover:from-amber-300 hover:to-orange-200 transition-all shadow-[0_0_20px_rgba(251,191,36,0.4)] flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4 text-slate-950" />
+                    <span>START NEW PAYMENT</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCheckPaymentStatus}
+                    disabled={isVerifying}
+                    className="w-full py-3.5 px-6 rounded-xl font-display font-bold tracking-widest text-sm text-slate-950 bg-gradient-to-r from-cyan-400 via-sky-300 to-cyan-400 hover:from-cyan-300 hover:to-sky-200 transition-all duration-300 shadow-[0_0_25px_rgba(0,242,254,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
+                  >
+                    {isVerifying ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                        <span>CHECKING TRANSACTION STATUS...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4 text-slate-950 font-bold" />
+                        <span>I HAVE COMPLETED PAYMENT</span>
+                      </>
+                    )}
+                  </button>
+                )}
 
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer"
+                  className="w-full py-2.5 px-6 rounded-xl font-mono-code text-xs text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-slate-800 transition-all text-center cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
+                  CANCEL PAYMENT
                 </button>
               </div>
-
-              <div>
-                <span className="text-[10px] font-mono-code font-bold text-cyan-400 tracking-wider">
-                  SECURE CHECKOUT DEMO
-                </span>
-                <h3 className="font-display font-bold text-xl text-white mt-0.5">
-                  SIMULATED PAYMENT PORTAL
-                </h3>
-                <p className="text-xs font-mono-code text-slate-400 mt-1">
-                  Select a demo method to simulate unlocking {module.name}
-                </p>
-              </div>
-
-              {/* Payment Methods Selector (Demo simulation) */}
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    cyberAudio.playClick(1100);
-                    setSelectedMethod('upi');
-                  }}
-                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                    selectedMethod === 'upi'
-                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.2)]'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <QrCode className="w-5 h-5 mx-auto mb-1 text-cyan-400" />
-                  <span className="text-xs font-mono-code font-bold block">UPI QR</span>
-                  <span className="text-[9px] font-mono-code text-slate-500">Instant Demo</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    cyberAudio.playClick(1100);
-                    setSelectedMethod('card');
-                  }}
-                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                    selectedMethod === 'card'
-                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.2)]'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <CreditCard className="w-5 h-5 mx-auto mb-1 text-cyan-400" />
-                  <span className="text-xs font-mono-code font-bold block">CARD</span>
-                  <span className="text-[9px] font-mono-code text-slate-500">Virtual Pass</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    cyberAudio.playClick(1100);
-                    setSelectedMethod('crypto');
-                  }}
-                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                    selectedMethod === 'crypto'
-                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.2)]'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ShieldCheck className="w-5 h-5 mx-auto mb-1 text-cyan-400" />
-                  <span className="text-xs font-mono-code font-bold block">Q-KEY</span>
-                  <span className="text-[9px] font-mono-code text-slate-500">Tokenized</span>
-                </button>
-              </div>
-
-              {/* Demo Mock Method Details */}
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between text-xs font-mono-code">
-                  <span className="text-slate-400">Total Demo Amount:</span>
-                  <span className="text-cyan-300 font-bold text-base">₹200.00</span>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] font-mono-code text-slate-400 flex items-center justify-between">
-                  <span>SANDBOX ROUTE:</span>
-                  <span className="text-emerald-400 font-semibold">GATEWAY_DEMO_200</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="space-y-2.5">
-                <button
-                  type="button"
-                  onClick={handleSimulatePayment}
-                  disabled={isProcessing}
-                  className="w-full py-3.5 px-6 rounded-xl font-display font-bold tracking-widest text-sm text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-200 transition-all duration-300 shadow-[0_0_25px_rgba(52,211,153,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
-                >
-                  {isProcessing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                      <span>SIMULATING ACCESS GRANT...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4 text-slate-950 font-bold" />
-                      <span>SIMULATE ₹200 DEMO PAYMENT</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="w-full py-3 px-6 rounded-xl font-mono-code text-xs text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-slate-800 transition-all text-center cursor-pointer"
-                >
-                  CANCEL
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Simulated Complete State */}
-          {checkoutStep === 'simulated_complete' && (
-            <div className="py-4 text-center space-y-5">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-950/80 border border-emerald-400/50 flex items-center justify-center shadow-[0_0_30px_rgba(52,211,153,0.35)]">
-                <Check className="w-8 h-8 text-emerald-400" />
-              </div>
-
-              <div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40">
-                  DEMO PASS SIMULATED
-                </span>
-                <h3 className="font-display font-bold text-2xl text-white tracking-wider mt-2">
-                  ACCESS PASS SIMULATED
-                </h3>
-                <p className="text-xs font-mono-code text-slate-300 mt-2 max-w-sm mx-auto">
-                  Simulation complete for <strong className="text-cyan-300">{module.name}</strong>. In production, verified access unlocks the secured dispatch cluster.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] font-mono-code text-slate-400">
-                <span>LICENSE TOKEN: </span>
-                <span className="text-cyan-300 font-bold">DEMO-PASS-{Date.now().toString(36).toUpperCase()}</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-full py-3.5 px-6 rounded-xl font-display font-bold tracking-widest text-sm text-slate-950 bg-gradient-to-r from-cyan-400 to-sky-300 hover:from-cyan-300 hover:to-sky-200 shadow-[0_0_25px_rgba(0,242,254,0.4)] cursor-pointer"
-              >
-                RETURN TO ACCESS MODULES
-              </button>
             </div>
           )}
         </motion.div>
