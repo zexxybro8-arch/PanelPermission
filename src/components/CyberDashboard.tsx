@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { 
   ArrowLeft, Terminal, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
-  ChevronRight
+  Flame, ChevronRight
 } from 'lucide-react';
 import { UserProfile, CyberModule } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
@@ -22,6 +22,14 @@ const INITIAL_MODULES: CyberModule[] = [
     description: 'Advanced telemetry instrumentation & sandboxed runtime virtualization environment.',
     tag: 'V2.4 KERNEL',
     version: '2.4.0',
+    enabled: false,
+  },
+  {
+    id: 'bala-mod-xyz',
+    name: 'BALA MOD XYZ',
+    description: 'Next-generation high-frequency vector accelerator & dynamic memory runtime interceptor.',
+    tag: 'XYZ MATRIX',
+    version: '5.2.0',
     enabled: false,
   },
   {
@@ -68,6 +76,7 @@ const INITIAL_MODULES: CyberModule[] = [
 
 const MODULE_ICONS: Record<string, React.ElementType> = {
   'angry-mod': Zap,
+  'bala-mod-xyz': Flame,
   'gk-panel': Cpu,
   'rapid-core': Activity,
   'dripclint': Droplets,
