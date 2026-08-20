@@ -557,10 +557,17 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
           files_access: Boolean(perm?.files_access),
           setup_access: Boolean(perm?.setup_access),
         };
+        console.log('[ADMIN SEARCH PERMISSIONS LOG]', {
+          'CUSTOMER ID': activeCustomer.customer_id,
+          'PANEL ID': m.id,
+          'VERIFY': Boolean(perm?.verify_access),
+          'FILES': Boolean(perm?.files_access),
+          'SETUP': Boolean(perm?.setup_access),
+        });
       });
       setLocalPermsState(initial);
     }
-  }, [activeCustomer?.id, activeCustomer?.customer_id, modules]);
+  }, [activeCustomer?.id, activeCustomer?.customer_id, JSON.stringify(activeCustomer?.panel_permissions), modules]);
 
   const handleToggleLocalPerm = (moduleId: string, field: 'verify_access' | 'files_access' | 'setup_access') => {
     setLocalPermsState(prev => {
@@ -582,16 +589,33 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
       let updatedPerms: any = {};
       for (const m of targetModules) {
         const p = localPermsState[m.id] || { verify_access: false, files_access: false, setup_access: false };
-        const res = await apiClient.updateCustomerPanelPermissions(customerId, m.id, {
-          verify_access: p.verify_access,
-          files_access: p.files_access,
-          setup_access: p.setup_access,
-        });
+        const payload = {
+          verify_access: Boolean(p.verify_access),
+          files_access: Boolean(p.files_access),
+          setup_access: Boolean(p.setup_access),
+        };
+
+        const res = await apiClient.updateCustomerPanelPermissions(customerId, m.id, payload);
+        if (!res || !res.success) {
+          throw new Error('Unable to save permissions. Please try again.');
+        }
+
+        const savedRecord = res.panel_permissions?.[m.id];
+        if (
+          !savedRecord ||
+          Boolean(savedRecord.verify_access) !== payload.verify_access ||
+          Boolean(savedRecord.files_access) !== payload.files_access ||
+          Boolean(savedRecord.setup_access) !== payload.setup_access
+        ) {
+          throw new Error('Unable to save permissions. Please try again.');
+        }
+
         if (res.panel_permissions) {
           updatedPerms = res.panel_permissions;
         }
       }
-      showToast('Customer permissions updated successfully.');
+
+      showToast('Permissions saved successfully');
       setCustomers(prev => prev.map(c => (c.id === customerId || c.customer_id === customerId) ? { ...c, panel_permissions: updatedPerms } : c));
       if (selectedCustomer && (selectedCustomer.id === customerId || selectedCustomer.customer_id === customerId)) {
         setSelectedCustomer(prev => prev ? { ...prev, panel_permissions: updatedPerms } : null);
@@ -599,7 +623,7 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
       await fetchCustomerData();
       if (onRefreshParent) onRefreshParent();
     } catch (err: unknown) {
-      showToast(extractErrorMessage(err, 'Failed to save customer permissions.'));
+      showToast(extractErrorMessage(err, 'Unable to save permissions. Please try again.'));
     } finally {
       setActionLoading(null);
     }

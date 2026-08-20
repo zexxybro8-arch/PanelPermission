@@ -595,6 +595,7 @@ export class AppStore {
         status: c.status,
         expiry_date: c.expiry_date,
         assigned_modules: c.assigned_modules || [],
+        panel_permissions: c.panel_permissions || {},
         created_at: c.created_at,
         updated_at: c.updated_at,
       })),
@@ -863,16 +864,11 @@ export class AppStore {
     customer.updated_at = new Date().toISOString();
 
     console.log('[ADMIN SAVE PERMISSIONS]', {
-      customerId: customer.customer_id,
-      panelId,
-      verify: customer.panel_permissions[panelId].verify_access,
-      files: customer.panel_permissions[panelId].files_access,
-      setup: customer.panel_permissions[panelId].setup_access,
-    });
-    console.log('[DATABASE RESPONSE PERMISSIONS]', {
-      customerId: customer.customer_id,
-      panelId,
-      savedPermissions: customer.panel_permissions[panelId],
+      'CUSTOMER ID': customer.customer_id,
+      'PANEL ID': panelId,
+      'VERIFY': customer.panel_permissions[panelId].verify_access,
+      'FILES': customer.panel_permissions[panelId].files_access,
+      'SETUP': customer.panel_permissions[panelId].setup_access,
     });
 
     this.logActivity(
@@ -1123,6 +1119,7 @@ export class AppStore {
           price: customer.price,
           expiry_date: customer.expiry_date,
           assigned_modules: customer.assigned_modules || [],
+          panel_permissions: customer.panel_permissions || {},
         },
       };
     }
