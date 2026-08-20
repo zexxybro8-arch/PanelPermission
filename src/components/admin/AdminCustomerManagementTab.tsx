@@ -97,6 +97,10 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
   // Panel Permissions Management Modal State
   const [permissionsModalCustomer, setPermissionsModalCustomer] = useState<Customer | null>(null);
 
+  // Inline Selected Customer for Access Permissions Section
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [localPermsState, setLocalPermsState] = useState<Record<string, { verify_access: boolean; files_access: boolean; setup_access: boolean }>>({});
+
   // Confirmation Modals (Block, Delete)
   const [confirmBlockCustomer, setConfirmBlockCustomer] = useState<Customer | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<Customer | null>(null);
@@ -417,6 +421,7 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
   };
 
   const handleOpenPermissionsModal = (c: Customer) => {
+    setSelectedCustomer(c);
     setPermissionsModalCustomer(c);
   };
 
@@ -535,6 +540,117 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
       label: `${diffDays} DAYS LEFT`,
       colorClass: 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30',
     };
+  };
+
+  // Determine Currently Active / Selected Customer for the Access Permissions Card
+  const activeCustomer = selectedCustomer || (searchTerm.trim() !== '' && sortedCustomers.length > 0 ? sortedCustomers[0] : null);
+
+  // Sync localPermsState whenever activeCustomer changes
+  useEffect(() => {
+    if (activeCustomer) {
+      const initial: Record<string, { verify_access: boolean; files_access: boolean; setup_access: boolean }> = {};
+      const activeMods = modules.length > 0 ? modules : [{ id: 'MOD-AEGIS-SENTINEL', name: 'Aegis Sentinel' }, { id: 'mod-1', name: 'Standard Module' }];
+      activeMods.forEach(m => {
+        const perm = activeCustomer.panel_permissions?.[m.id];
+        initial[m.id] = {
+          verify_access: Boolean(perm?.verify_access),
+          files_access: Boolean(perm?.files_access),
+          setup_access: Boolean(perm?.setup_access),
+        };
+      });
+      setLocalPermsState(initial);
+    }
+  }, [activeCustomer?.id, activeCustomer?.customer_id, modules]);
+
+  const handleToggleLocalPerm = (moduleId: string, field: 'verify_access' | 'files_access' | 'setup_access') => {
+    setLocalPermsState(prev => {
+      const current = prev[moduleId] || { verify_access: false, files_access: false, setup_access: false };
+      return {
+        ...prev,
+        [moduleId]: {
+          ...current,
+          [field]: !current[field],
+        },
+      };
+    });
+  };
+
+  const handleSaveCustomerPermissions = async (customerId: string) => {
+    setActionLoading(`save-perms-${customerId}`);
+    try {
+      const targetModules = modules.length > 0 ? modules : [{ id: 'MOD-AEGIS-SENTINEL', name: 'Aegis Sentinel' }, { id: 'mod-1', name: 'Standard Module' }];
+      let updatedPerms: any = {};
+      for (const m of targetModules) {
+        const p = localPermsState[m.id] || { verify_access: false, files_access: false, setup_access: false };
+        const res = await apiClient.updateCustomerPanelPermissions(customerId, m.id, {
+          verify_access: p.verify_access,
+          files_access: p.files_access,
+          setup_access: p.setup_access,
+        });
+        if (res.panel_permissions) {
+          updatedPerms = res.panel_permissions;
+        }
+      }
+      showToast('Customer permissions updated successfully.');
+      setCustomers(prev => prev.map(c => (c.id === customerId || c.customer_id === customerId) ? { ...c, panel_permissions: updatedPerms } : c));
+      if (selectedCustomer && (selectedCustomer.id === customerId || selectedCustomer.customer_id === customerId)) {
+        setSelectedCustomer(prev => prev ? { ...prev, panel_permissions: updatedPerms } : null);
+      }
+      await fetchCustomerData();
+      if (onRefreshParent) onRefreshParent();
+    } catch (err: unknown) {
+      showToast(extractErrorMessage(err, 'Failed to save customer permissions.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEnableAllLocal = async (customerId: string) => {
+    setActionLoading(`enable-all-${customerId}`);
+    try {
+      const res = await apiClient.bulkUpdateCustomerPanelPermissions(customerId, 'unlock_all');
+      showToast('Customer permissions updated successfully.');
+      const updatedPerms = res.panel_permissions;
+      setCustomers(prev => prev.map(c => (c.id === customerId || c.customer_id === customerId) ? { ...c, panel_permissions: updatedPerms } : c));
+      if (selectedCustomer && (selectedCustomer.id === customerId || selectedCustomer.customer_id === customerId)) {
+        setSelectedCustomer(prev => prev ? { ...prev, panel_permissions: updatedPerms } : null);
+      }
+      const updatedLocal: Record<string, any> = {};
+      modules.forEach(m => {
+        updatedLocal[m.id] = { verify_access: true, files_access: true, setup_access: true };
+      });
+      setLocalPermsState(updatedLocal);
+      await fetchCustomerData();
+      if (onRefreshParent) onRefreshParent();
+    } catch (err: unknown) {
+      showToast(extractErrorMessage(err, 'Failed to enable all permissions.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleLockAllLocal = async (customerId: string) => {
+    setActionLoading(`lock-all-${customerId}`);
+    try {
+      const res = await apiClient.bulkUpdateCustomerPanelPermissions(customerId, 'lock_all');
+      showToast('Customer permissions updated successfully.');
+      const updatedPerms = res.panel_permissions;
+      setCustomers(prev => prev.map(c => (c.id === customerId || c.customer_id === customerId) ? { ...c, panel_permissions: updatedPerms } : c));
+      if (selectedCustomer && (selectedCustomer.id === customerId || selectedCustomer.customer_id === customerId)) {
+        setSelectedCustomer(prev => prev ? { ...prev, panel_permissions: updatedPerms } : null);
+      }
+      const updatedLocal: Record<string, any> = {};
+      modules.forEach(m => {
+        updatedLocal[m.id] = { verify_access: false, files_access: false, setup_access: false };
+      });
+      setLocalPermsState(updatedLocal);
+      await fetchCustomerData();
+      if (onRefreshParent) onRefreshParent();
+    } catch (err: unknown) {
+      showToast(extractErrorMessage(err, 'Failed to lock all permissions.'));
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   return (
@@ -711,6 +827,196 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
           </select>
         </div>
       </div>
+
+      {/* ======================================================== */}
+      {/* INLINE DETAILED CUSTOMER ACCESS PERMISSIONS CARD */}
+      {/* ======================================================== */}
+      {activeCustomer && (
+        <div className="bg-slate-900 border-2 border-cyan-500/50 p-5 rounded-2xl shadow-[0_0_35px_rgba(0,242,254,0.15)] space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500/50 flex items-center justify-center text-cyan-400 font-mono-code font-bold">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30 uppercase">
+                  CUSTOMER ACCESS CONTROL PANEL
+                </span>
+                <h3 className="text-base font-display font-bold text-white mt-0.5 flex items-center gap-2">
+                  <span>CUSTOMER: {activeCustomer.customer_id}</span>
+                  <span className="text-slate-400 font-mono-code text-xs">({activeCustomer.username})</span>
+                </h3>
+              </div>
+            </div>
+            {selectedCustomer && (
+              <button
+                type="button"
+                onClick={() => setSelectedCustomer(null)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono-code flex items-center gap-1 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>DESELECT</span>
+              </button>
+            )}
+          </div>
+
+          {/* Customer Metadata Overview Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-950/90 p-3.5 rounded-xl border border-slate-800 text-xs font-mono-code">
+            <div>
+              <span className="text-slate-500 text-[10px] block">CUSTOMER ID</span>
+              <span className="text-cyan-300 font-bold">{activeCustomer.customer_id}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 text-[10px] block">USERNAME</span>
+              <span className="text-white font-bold">{activeCustomer.username}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 text-[10px] block">STATUS</span>
+              <span className={`font-bold ${activeCustomer.status === 'blocked' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {activeCustomer.status.toUpperCase()}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 text-[10px] block">PAYMENT STATUS</span>
+              <span className="text-amber-300 font-bold uppercase">
+                {(() => {
+                  const panelList = activeCustomer.panel_permissions ? Object.values(activeCustomer.panel_permissions) : [];
+                  const hasAppr = panelList.some((p: any) => p?.payment_status === 'approved' || p?.purchased);
+                  const hasPend = panelList.some((p: any) => p?.payment_status === 'pending');
+                  return hasAppr ? 'APPROVED' : hasPend ? 'PENDING' : 'NONE';
+                })()}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 text-[10px] block">PRICE</span>
+              <span className="text-cyan-300 font-bold">₹{activeCustomer.price}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 text-[10px] block">EXPIRY DATE</span>
+              <span className="text-slate-200 font-bold">
+                {activeCustomer.expiry_date ? activeCustomer.expiry_date.split('T')[0] : 'N/A'}
+              </span>
+            </div>
+          </div>
+
+          {/* ACCESS PERMISSIONS SECTION */}
+          <div className="pt-2 border-t border-slate-800/80">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-3">
+              <h4 className="text-xs font-mono-code font-bold text-cyan-300 tracking-wider uppercase flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                <span>ACCESS PERMISSIONS</span>
+              </h4>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleEnableAllLocal(activeCustomer.id || activeCustomer.customer_id)}
+                  disabled={actionLoading === `enable-all-${activeCustomer.id || activeCustomer.customer_id}`}
+                  className="px-3 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 text-xs font-mono-code font-bold flex items-center gap-1 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  <Unlock className="w-3 h-3" />
+                  <span>ENABLE ALL</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLockAllLocal(activeCustomer.id || activeCustomer.customer_id)}
+                  disabled={actionLoading === `lock-all-${activeCustomer.id || activeCustomer.customer_id}`}
+                  className="px-3 py-1 rounded-lg bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/40 text-xs font-mono-code font-bold flex items-center gap-1 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>LOCK ALL</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Individual Panel/Module Permission Toggles */}
+            <div className="space-y-2.5">
+              {(modules.length > 0 ? modules : [{ id: 'MOD-AEGIS-SENTINEL', name: 'Aegis Sentinel' }, { id: 'mod-1', name: 'Standard Module' }]).map((mod) => {
+                const perm = localPermsState[mod.id] || {
+                  verify_access: false,
+                  files_access: false,
+                  setup_access: false,
+                };
+
+                return (
+                  <div key={mod.id} className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="font-bold text-slate-100 text-xs font-mono-code">{mod.name}</span>
+                      <span className="text-[10px] text-slate-500 font-mono-code bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">{mod.id}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4">
+                      {/* VERIFY Toggle */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono-code font-bold text-slate-400">VERIFY</span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleLocalPerm(mod.id, 'verify_access')}
+                          className={`px-3 py-1 rounded-lg text-xs font-mono-code font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                            perm.verify_access
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                              : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                          }`}
+                        >
+                          {perm.verify_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
+                          <span>{perm.verify_access ? 'ON' : 'OFF'}</span>
+                        </button>
+                      </div>
+
+                      {/* FILES Toggle */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono-code font-bold text-slate-400">FILES</span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleLocalPerm(mod.id, 'files_access')}
+                          className={`px-3 py-1 rounded-lg text-xs font-mono-code font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                            perm.files_access
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                              : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                          }`}
+                        >
+                          {perm.files_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
+                          <span>{perm.files_access ? 'ON' : 'OFF'}</span>
+                        </button>
+                      </div>
+
+                      {/* SETUP Toggle */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono-code font-bold text-slate-400">SETUP</span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleLocalPerm(mod.id, 'setup_access')}
+                          className={`px-3 py-1 rounded-lg text-xs font-mono-code font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                            perm.setup_access
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                              : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                          }`}
+                        >
+                          {perm.setup_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
+                          <span>{perm.setup_access ? 'ON' : 'OFF'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* SAVE PERMISSIONS BUTTON */}
+            <div className="flex items-center justify-end mt-4 pt-3 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => handleSaveCustomerPermissions(activeCustomer.id || activeCustomer.customer_id)}
+                disabled={actionLoading === `save-perms-${activeCustomer.id || activeCustomer.customer_id}`}
+                className="px-6 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition-all shadow-[0_0_20px_rgba(0,242,254,0.3)] cursor-pointer text-xs font-mono-code flex items-center gap-2 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>SAVE PERMISSIONS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Customer Directory Table & Mobile Cards */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden backdrop-blur-sm">
