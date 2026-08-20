@@ -813,7 +813,8 @@ export class AppStore {
 
   public getPortalConfig(userId?: string) {
     const user = userId ? this.state.users.find((u) => u.id === userId || u.username.toUpperCase() === userId.toUpperCase()) : null;
-    const targetUserId = user ? user.id : userId;
+    const customer = userId ? this.state.customers.find((c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase()) : null;
+    const targetUserId = user ? user.id : (customer ? customer.id : userId);
     const customPricing = targetUserId ? this.state.userPricing[targetUserId] : null;
 
     const plans = this.state.runtimePlans
@@ -822,7 +823,13 @@ export class AppStore {
         let userPrice = plan.defaultPrice;
         let hasCustomPrice = false;
 
-        if (customPricing) {
+        if (customer && typeof customer.price === 'number') {
+          if (plan.id === 'plan-15') userPrice = customer.price;
+          else if (plan.id === 'plan-20') userPrice = Math.round(customer.price * 1.15);
+          else if (plan.id === 'plan-30') userPrice = Math.round(customer.price * 1.25);
+          else if (plan.id === 'plan-perm') userPrice = Math.round(customer.price * 1.8);
+          hasCustomPrice = true;
+        } else if (customPricing) {
           if (plan.id === 'plan-15' && customPricing.plan15Price !== undefined) {
             userPrice = customPricing.plan15Price;
             hasCustomPrice = true;
@@ -847,8 +854,14 @@ export class AppStore {
 
     const userLicenses = targetUserId ? this.state.licenses.filter((l) => l.userId === targetUserId || l.username === user?.username) : [];
 
+    // Filter modules if customer has specific assigned modules
+    let visibleModules = this.state.modules.filter((m) => m.enabled !== false && m.status !== 'inactive');
+    if (customer && Array.isArray(customer.assigned_modules)) {
+      visibleModules = visibleModules.filter((m) => customer.assigned_modules.includes(m.id));
+    }
+
     return {
-      modules: this.state.modules.filter((m) => m.enabled),
+      modules: visibleModules,
       plans,
       userLicenses,
       upiQrImage: this.state.settings.upiQrImageUrl,
@@ -1210,51 +1223,111 @@ export class AppStore {
   // ==========================================
 
   public getModules(): CyberModule[] {
-    return this.state.modules;
+    const customers = this.state.customers || [];
+    return this.state.modules.map((m) => {
+      const assigned = customers
+        .filter((c) => Array.isArray(c.assigned_modules) && c.assigned_modules.includes(m.id))
+        .map((c) => ({
+          id: c.id,
+          customer_id: c.customer_id,
+          username: c.username,
+        }));
+      return {
+        ...m,
+        status: m.status || (m.enabled ? 'active' : 'inactive'),
+        price: m.price || 120,
+        imageUrl: m.imageUrl || '',
+        assignedCustomers: assigned,
+        assignedCustomerIds: assigned.map((c) => c.id),
+      };
+    });
   }
 
   public createModule(moduleData: Partial<CyberModule>): { success: boolean; message: string; module: CyberModule } {
-    const id = 'MOD-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const rawId = (moduleData.id || moduleData.name || 'MOD-' + Math.random().toString(36).substring(2, 8)).toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    const id = rawId || 'mod-' + Date.now();
     const newMod: CyberModule = {
       id,
-      name: moduleData.name || 'New Defense Module',
+      name: moduleData.name || 'New Access Panel',
       version: moduleData.version || '1.0.0',
-      description: moduleData.description || 'Cyber defense capability',
-      tag: moduleData.tag || 'SECURITY',
+      description: moduleData.description || 'Cybersecurity operational access panel',
+      tag: moduleData.tag || 'CUSTOM',
       icon: moduleData.icon || 'Shield',
+      imageUrl: moduleData.imageUrl || '',
+      price: typeof moduleData.price === 'number' ? moduleData.price : 120,
+      status: moduleData.status || 'active',
       enabled: moduleData.enabled !== undefined ? moduleData.enabled : true,
-      requiredRuntime: moduleData.requiredRuntime || 'Standard Cyber Runtime',
+      requiredRuntime: moduleData.requiredRuntime || '15+ Days Access',
       orderIndex: this.state.modules.length + 1,
     };
     this.state.modules.push(newMod);
-    this.logActivity('SAGAR551', 'MODULE_CREATED', newMod.name, 'SUCCESS', `Created module ${newMod.name}`);
+
+    // Sync assigned customers if provided
+    if (Array.isArray(moduleData.assignedCustomerIds) && this.state.customers) {
+      this.state.customers.forEach((cust) => {
+        if (moduleData.assignedCustomerIds!.includes(cust.id) || moduleData.assignedCustomerIds!.includes(cust.customer_id)) {
+          if (!cust.assigned_modules.includes(newMod.id)) {
+            cust.assigned_modules.push(newMod.id);
+            cust.updated_at = new Date().toISOString();
+          }
+        }
+      });
+    }
+
+    this.logActivity('SAGAR551', 'PANEL_CREATED', newMod.name, 'SUCCESS', `Created panel ${newMod.name}`);
     this.saveToStorage();
-    return { success: true, message: 'Module created successfully', module: newMod };
+    return { success: true, message: 'Panel created successfully', module: newMod };
   }
 
   public updateModule(id: string, updates: Partial<CyberModule>): { success: boolean; message: string; module: CyberModule } {
     const mod = this.state.modules.find((m) => m.id === id);
-    if (!mod) throw new Error('Module not found');
+    if (!mod) throw new Error('Panel not found');
     Object.assign(mod, updates);
-    this.logActivity('SAGAR551', 'MODULE_UPDATED', mod.name, 'SUCCESS', `Updated module ${mod.name}`);
+
+    // Sync assigned customers if provided
+    if (Array.isArray(updates.assignedCustomerIds) && this.state.customers) {
+      this.state.customers.forEach((cust) => {
+        const shouldHave = updates.assignedCustomerIds!.includes(cust.id) || updates.assignedCustomerIds!.includes(cust.customer_id);
+        const hasIt = cust.assigned_modules.includes(id);
+        if (shouldHave && !hasIt) {
+          cust.assigned_modules.push(id);
+          cust.updated_at = new Date().toISOString();
+        } else if (!shouldHave && hasIt) {
+          cust.assigned_modules = cust.assigned_modules.filter((mId) => mId !== id);
+          cust.updated_at = new Date().toISOString();
+        }
+      });
+    }
+
+    this.logActivity('SAGAR551', 'PANEL_UPDATED', mod.name, 'SUCCESS', `Updated panel ${mod.name}`);
     this.saveToStorage();
-    return { success: true, message: 'Module updated successfully', module: mod };
+    return { success: true, message: 'Panel updated successfully', module: mod };
   }
 
   public toggleModuleStatus(id: string): { success: boolean; message: string; module: CyberModule } {
     const mod = this.state.modules.find((m) => m.id === id);
-    if (!mod) throw new Error('Module not found');
+    if (!mod) throw new Error('Panel not found');
     mod.enabled = !mod.enabled;
-    this.logActivity('SAGAR551', 'MODULE_TOGGLED', mod.name, 'SUCCESS', `Toggled ${mod.name} status to ${mod.enabled}`);
+    mod.status = mod.enabled ? 'active' : 'inactive';
+    this.logActivity('SAGAR551', 'PANEL_TOGGLED', mod.name, 'SUCCESS', `Toggled ${mod.name} status to ${mod.enabled}`);
     this.saveToStorage();
-    return { success: true, message: `Module status changed to ${mod.enabled ? 'Enabled' : 'Disabled'}`, module: mod };
+    return { success: true, message: `Panel status changed to ${mod.enabled ? 'Enabled' : 'Disabled'}`, module: mod };
   }
 
   public deleteModule(id: string): { success: boolean; message: string } {
     this.state.modules = this.state.modules.filter((m) => m.id !== id);
-    this.logActivity('SAGAR551', 'MODULE_DELETED', id, 'SUCCESS', `Deleted module ${id}`);
+    // Cleanup assignments
+    if (this.state.customers) {
+      this.state.customers.forEach((cust) => {
+        if (cust.assigned_modules.includes(id)) {
+          cust.assigned_modules = cust.assigned_modules.filter((mId) => mId !== id);
+          cust.updated_at = new Date().toISOString();
+        }
+      });
+    }
+    this.logActivity('SAGAR551', 'PANEL_DELETED', id, 'SUCCESS', `Deleted panel ${id}`);
     this.saveToStorage();
-    return { success: true, message: 'Module deleted successfully' };
+    return { success: true, message: 'Panel deleted successfully' };
   }
 
   // ==========================================

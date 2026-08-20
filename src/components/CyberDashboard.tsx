@@ -4,7 +4,7 @@ import {
   ArrowLeft, Terminal, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
   Flame, ChevronRight, ShieldCheck, LayoutDashboard, Radio, Shield,
-  User, Copy, CheckCircle2
+  User, Copy, CheckCircle2, ImageIcon
 } from 'lucide-react';
 import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
@@ -31,6 +31,13 @@ const MODULE_ICONS: Record<string, React.ElementType> = {
   'dripclint': Droplets,
   'xyz-cheats': Crosshair,
   'silent-cheats': EyeOff,
+  'mod-1': Flame,
+  'mod-2': Zap,
+  'mod-3': Cpu,
+  'mod-4': Activity,
+  'mod-5': Droplets,
+  'mod-6': Crosshair,
+  'mod-7': EyeOff,
 };
 
 export const CyberDashboard: React.FC<CyberDashboardProps> = ({
@@ -46,13 +53,14 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [activePaywallModule, setActivePaywallModule] = useState<CyberModule | null>(null);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [imageErrorMap, setImageErrorMap] = useState<Record<string, boolean>>({});
 
-  // Load live portal catalogue and personalized pricing from local store
+  // Load live portal catalogue and personalized pricing from local store / server
   const loadPortalConfig = async () => {
     try {
-      const config = await apiClient.getPortalConfig(user.id || user.username);
-      setModules(config.modules);
-      setPlans(config.plans);
+      const config = await apiClient.getPortalConfig(user.id || user.customer_id || user.username);
+      setModules(config.modules || []);
+      setPlans(config.plans || []);
       setUserLicenses(config.userLicenses || []);
       if (config.upiQrImage) setUpiQrImage(config.upiQrImage);
     } catch (err) {
@@ -91,7 +99,8 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
     loadPortalConfig();
   };
 
-  const isAdmin = user.role === 'admin' || user.clearanceLevel >= 5 || user.username === 'SAGAR551';
+  // Strictly enforce role check: only verified admin SAGAR551 with valid admin token
+  const isAdmin = user.role === 'admin' && user.username === 'SAGAR551' && !!apiClient.getAdminToken();
 
   // Calculate days remaining for customer
   const now = new Date();
@@ -139,15 +148,15 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
               </span>
             </div>
             <h1 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wider">
-              ACCESS MODULES
+              ACCESS PANELS
             </h1>
             <p className="text-xs text-slate-400 font-mono-code mt-0.5">
-              Select a module to request access
+              Select a panel to access
             </p>
           </div>
         </div>
 
-        {/* Top Action Buttons */}
+        {/* Top Action Buttons (Admin Panel button strictly hidden for customers) */}
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
           {isAdmin && onOpenAdmin && (
             <button
@@ -289,115 +298,145 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         </div>
       </div>
 
-      {/* Grid of Cyber Modules */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-        {modules.map((mod, index) => {
-          const IconComponent = MODULE_ICONS[mod.id] || MODULE_ICONS[mod.icon] || Shield;
-          
-          // Customer module assignment check
-          const isCustomerModule = Array.isArray(user.assigned_modules) && user.assigned_modules.length > 0
-            ? user.assigned_modules.includes(mod.id)
-            : false;
+      {/* Grid of Cyber Panels */}
+      {modules.length === 0 ? (
+        <div className="p-12 rounded-3xl cyber-glass border border-slate-800 bg-slate-950/70 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-cyan-950/60 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
+            <Shield className="w-6 h-6" />
+          </div>
+          <h3 className="font-display font-bold text-lg text-white">NO ACCESS PANELS ASSIGNED</h3>
+          <p className="text-xs font-mono-code text-slate-400 max-w-md mx-auto">
+            No access panels have been assigned to your customer account yet. Please contact the administrator to grant panel authorization.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+          {modules.map((mod, index) => {
+            const IconComponent = MODULE_ICONS[mod.id] || MODULE_ICONS[mod.icon] || Shield;
+            
+            // Customer module assignment check
+            const isCustomerModule = Array.isArray(user.assigned_modules) && user.assigned_modules.length > 0
+              ? user.assigned_modules.includes(mod.id)
+              : true;
 
-          const hasLicense = isCustomerModule || userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
+            const hasLicense = isCustomerModule || userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
+            const hasValidImage = !!mod.imageUrl && !imageErrorMap[mod.id];
 
-          return (
-            <motion.div
-              key={mod.id}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              className="rounded-2xl cyber-glass p-5 border border-slate-800/90 hover:border-cyan-500/40 hover:shadow-[0_0_30px_-5px_rgba(0,242,254,0.2)] transition-all duration-300 relative group overflow-hidden flex flex-col justify-between"
-              style={{
-                background: 'linear-gradient(145deg, rgba(12, 17, 28, 0.85) 0%, rgba(7, 10, 16, 0.95) 100%)',
-              }}
-            >
-              {/* Subtle top card glow line on hover */}
-              <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            return (
+              <motion.div
+                key={mod.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
+                className="rounded-2xl cyber-glass p-5 border border-slate-800/90 hover:border-cyan-500/40 hover:shadow-[0_0_30px_-5px_rgba(0,242,254,0.2)] transition-all duration-300 relative group overflow-hidden flex flex-col justify-between"
+                style={{
+                  background: 'linear-gradient(145deg, rgba(12, 17, 28, 0.85) 0%, rgba(7, 10, 16, 0.95) 100%)',
+                }}
+              >
+                {/* Subtle top card glow line on hover */}
+                <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-              <div className="space-y-3">
-                {/* Card Top: Icon, Name & Tag */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(0,242,254,0.2)] group-hover:scale-105 transition-transform shrink-0">
-                      <IconComponent className="w-5 h-5" />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="font-display font-bold text-lg text-white tracking-wider group-hover:text-cyan-200 transition-colors">
-                          {mod.name}
-                        </h2>
+                <div className="space-y-4">
+                  {/* Card Top: Visual Panel Image / Icon, Name & Tag */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3.5">
+                      {/* Image or Icon Preview */}
+                      <div className="relative w-12 h-12 rounded-xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(0,242,254,0.2)] group-hover:scale-105 transition-transform shrink-0 overflow-hidden">
+                        {hasValidImage ? (
+                          <img
+                            src={mod.imageUrl}
+                            alt={mod.name}
+                            className="w-full h-full object-cover rounded-xl"
+                            onError={() => setImageErrorMap(prev => ({ ...prev, [mod.id]: true }))}
+                          />
+                        ) : (
+                          <IconComponent className="w-6 h-6" />
+                        )}
                       </div>
-                      <span className="text-[10px] font-mono-code text-cyan-400/80">
-                        {mod.tag} • v{mod.version}
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="font-display font-bold text-lg text-white tracking-wider group-hover:text-cyan-200 transition-colors">
+                            {mod.name}
+                          </h2>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] font-mono-code text-cyan-400/80">
+                            {mod.tag} • v{mod.version}
+                          </span>
+                          {typeof mod.price === 'number' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono-code font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
+                              ₹{mod.price}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Animated ON/OFF Toggle */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-[11px] font-mono-code font-bold select-none ${hasLicense ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        {hasLicense ? 'ON' : 'OFF'}
                       </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleModule(mod)}
+                        className={`w-12 h-6 rounded-full border p-0.5 transition-all duration-300 relative cursor-pointer focus:outline-none ${
+                          hasLicense
+                            ? 'bg-emerald-950/80 border-emerald-500/60'
+                            : 'bg-slate-900 border-slate-700 hover:border-cyan-400/60'
+                        }`}
+                        title={hasLicense ? `Active license on ${mod.name}` : `Request access for ${mod.name}`}
+                      >
+                        {/* Toggle Knob */}
+                        <motion.div
+                          className={`w-4.5 h-4.5 rounded-full shadow-md flex items-center justify-center ${
+                            hasLicense ? 'bg-emerald-400' : 'bg-slate-400 group-hover/toggle:bg-cyan-300'
+                          }`}
+                          animate={{ x: hasLicense ? 24 : 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                        >
+                          <Lock className="w-2.5 h-2.5 text-slate-900" />
+                        </motion.div>
+                      </button>
                     </div>
                   </div>
 
-                  {/* Animated ON/OFF Toggle */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[11px] font-mono-code font-bold select-none ${hasLicense ? 'text-emerald-400' : 'text-slate-500'}`}>
-                      {hasLicense ? 'ON' : 'OFF'}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => handleToggleModule(mod)}
-                      className={`w-12 h-6 rounded-full border p-0.5 transition-all duration-300 relative cursor-pointer focus:outline-none ${
-                        hasLicense
-                          ? 'bg-emerald-950/80 border-emerald-500/60'
-                          : 'bg-slate-900 border-slate-700 hover:border-cyan-400/60'
-                      }`}
-                      title={hasLicense ? `Active license on ${mod.name}` : `Request access for ${mod.name}`}
-                    >
-                      {/* Toggle Knob */}
-                      <motion.div
-                        className={`w-4.5 h-4.5 rounded-full shadow-md flex items-center justify-center ${
-                          hasLicense ? 'bg-emerald-400' : 'bg-slate-400 group-hover/toggle:bg-cyan-300'
-                        }`}
-                        animate={{ x: hasLicense ? 24 : 0 }}
-                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                      >
-                        <Lock className="w-2.5 h-2.5 text-slate-900" />
-                      </motion.div>
-                    </button>
-                  </div>
+                  {/* Neutral Description */}
+                  <p className="text-xs font-mono-code text-slate-400 leading-relaxed">
+                    {mod.description}
+                  </p>
                 </div>
 
-                {/* Neutral Description */}
-                <p className="text-xs font-mono-code text-slate-400 leading-relaxed">
-                  {mod.description}
-                </p>
-              </div>
+                {/* Bottom Card Footer: Request Button / State */}
+                <div className="pt-4 mt-3 border-t border-slate-900/90 flex items-center justify-between text-[11px] font-mono-code">
+                  {hasLicense ? (
+                    <span className="text-emerald-400 flex items-center gap-1.5 font-bold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      AUTHORIZED ACCESS ACTIVE
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+                      REQUIRES ACCESS PASS
+                    </span>
+                  )}
 
-              {/* Bottom Card Footer: Request Button / State */}
-              <div className="pt-4 mt-3 border-t border-slate-900/90 flex items-center justify-between text-[11px] font-mono-code">
-                {hasLicense ? (
-                  <span className="text-emerald-400 flex items-center gap-1.5 font-bold">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    AUTHORIZED RUNTIME ACTIVE
-                  </span>
-                ) : (
-                  <span className="text-slate-500 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
-                    REQUIRES ACCESS PASS
-                  </span>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => handleToggleModule(mod)}
-                  className="text-cyan-400 hover:text-cyan-200 hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <span>{hasLicense ? 'MANAGE RUNTIME' : 'REQUEST ACCESS'}</span>
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleModule(mod)}
+                    className="text-cyan-400 hover:text-cyan-200 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{hasLicense ? 'MANAGE ACCESS' : 'REQUEST ACCESS'}</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Simulated Premium Paywall Modal */}
       <PremiumPaymentModal

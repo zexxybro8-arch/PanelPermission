@@ -18,6 +18,21 @@ interface StoredCustomer {
   updated_at: string;
 }
 
+interface StoredPanel {
+  id: string;
+  name: string;
+  description: string;
+  tag: string;
+  version: string;
+  enabled: boolean;
+  status?: 'active' | 'inactive';
+  price?: number;
+  icon?: string;
+  imageUrl?: string;
+  requiredRuntime?: string;
+  orderIndex?: number;
+}
+
 interface ServerDatabase {
   customers: StoredCustomer[];
   admin: {
@@ -25,25 +40,83 @@ interface ServerDatabase {
     password_hash: string;
     role: string;
   };
-  modules: Array<{
-    id: string;
-    name: string;
-    description: string;
-    tag: string;
-    version: string;
-    enabled: boolean;
-  }>;
+  modules: StoredPanel[];
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_FILE = path.join(DATA_DIR, "customers.json");
 
-const DEFAULT_MODULES = [
-  { id: 'mod-1', name: 'Module 1 (BALA MOD XYZ)', description: 'Advanced security scanning & real-time telemetry analyzer.', tag: 'DEFENSE', version: '4.2', enabled: true },
-  { id: 'mod-2', name: 'Module 2 (ANGRY MOD)', description: 'High-frequency lattice cryptographic decryption node.', tag: 'LATTICE', version: '3.1', enabled: true },
-  { id: 'mod-3', name: 'Module 3 (RAPID CORE)', description: 'Low-latency network gateway traffic optimizer.', tag: 'CORE', version: '5.0', enabled: true },
-  { id: 'mod-4', name: 'Module 4 (ZERO TRACE)', description: 'Stealth obfuscation proxy and zero-trace routing.', tag: 'STEALTH', version: '2.8', enabled: true },
-  { id: 'mod-5', name: 'Module 5 (DRIPCLINT)', description: 'High-yield threat mitigation and memory barrier.', tag: 'FIREWALL', version: '6.4', enabled: true },
+const DEFAULT_MODULES: StoredPanel[] = [
+  { 
+    id: 'mod-1', 
+    name: 'BALA MOD XYZ', 
+    description: 'Advanced real-time packet scanner, zero-day threat nullifier, and telemetry analyzer.', 
+    tag: 'DEFENSE', 
+    version: '4.2', 
+    enabled: true,
+    status: 'active',
+    price: 120,
+    icon: 'Flame',
+    imageUrl: '',
+    requiredRuntime: '15-30 Days',
+    orderIndex: 1
+  },
+  { 
+    id: 'mod-2', 
+    name: 'ANGRY MOD', 
+    description: 'High-frequency lattice cryptographic decryption node with quantum resistance.', 
+    tag: 'LATTICE', 
+    version: '3.1', 
+    enabled: true,
+    status: 'active',
+    price: 150,
+    icon: 'Zap',
+    imageUrl: '',
+    requiredRuntime: '20+ Days',
+    orderIndex: 2
+  },
+  { 
+    id: 'mod-3', 
+    name: 'RAPID CORE', 
+    description: 'Low-latency network gateway traffic optimizer and dynamic load orchestrator.', 
+    tag: 'CORE', 
+    version: '5.0', 
+    enabled: true,
+    status: 'active',
+    price: 135,
+    icon: 'Activity',
+    imageUrl: '',
+    requiredRuntime: '15+ Days',
+    orderIndex: 3
+  },
+  { 
+    id: 'mod-4', 
+    name: 'ZERO TRACE', 
+    description: 'Stealth obfuscation proxy with rotating ephemeral egress IP meshes.', 
+    tag: 'STEALTH', 
+    version: '2.8', 
+    enabled: true,
+    status: 'active',
+    price: 140,
+    icon: 'EyeOff',
+    imageUrl: '',
+    requiredRuntime: '30+ Days',
+    orderIndex: 4
+  },
+  { 
+    id: 'mod-5', 
+    name: 'DRIPCLINT', 
+    description: 'High-yield memory barrier protection and runtime sandbox fortification.', 
+    tag: 'FIREWALL', 
+    version: '6.4', 
+    enabled: true,
+    status: 'active',
+    price: 160,
+    icon: 'Droplets',
+    imageUrl: '',
+    requiredRuntime: 'Permanent / 30D',
+    orderIndex: 5
+  },
 ];
 
 function hashPassword(password: string): string {
@@ -633,10 +706,290 @@ async function startServer() {
     });
   });
 
-  // Get available modules
-  app.get("/api/admin/modules", (_req, res) => {
+  // Helper to enrich modules with assigned customers
+  function getEnrichedPanels(database: ServerDatabase) {
+    return database.modules.map(mod => {
+      const assignedCustomers = database.customers
+        .filter(c => Array.isArray(c.assigned_modules) && c.assigned_modules.includes(mod.id))
+        .map(c => ({
+          id: c.id,
+          customer_id: c.customer_id,
+          username: c.username,
+        }));
+      const assignedCustomerIds = assignedCustomers.map(c => c.id);
+      return {
+        ...mod,
+        status: mod.status || (mod.enabled ? 'active' : 'inactive'),
+        price: mod.price || 120,
+        imageUrl: mod.imageUrl || '',
+        assignedCustomers,
+        assignedCustomerIds,
+      };
+    });
+  }
+
+  // Admin Panels / Modules Management
+  app.get(["/api/admin/modules", "/api/admin/panels"], (req, res) => {
     db = loadDatabase();
-    return res.json(db.modules);
+    return res.json(getEnrichedPanels(db));
+  });
+
+  // Create Panel
+  app.post(["/api/admin/modules", "/api/admin/panels"], (req, res) => {
+    db = loadDatabase();
+    const {
+      id,
+      name,
+      description,
+      tag,
+      version,
+      enabled,
+      status,
+      price,
+      icon,
+      imageUrl,
+      requiredRuntime,
+      assignedCustomerIds,
+    } = req.body;
+
+    const rawId = (id || name || `panel-${Date.now()}`).toString().trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    let finalId = rawId || `panel-${Date.now()}`;
+    let counter = 1;
+    while (db.modules.some(m => m.id === finalId)) {
+      finalId = `${rawId}-${counter++}`;
+    }
+
+    const newPanel: StoredPanel = {
+      id: finalId,
+      name: (name || 'NEW ACCESS PANEL').toString().trim().toUpperCase(),
+      description: (description || 'Cybersecurity operational access panel.').toString().trim(),
+      tag: (tag || 'CUSTOM').toString().trim().toUpperCase(),
+      version: (version || '1.0.0').toString().trim(),
+      enabled: enabled !== false,
+      status: status === 'inactive' ? 'inactive' : 'active',
+      price: typeof price === 'number' ? price : Number(price) || 120,
+      icon: icon || 'Shield',
+      imageUrl: (imageUrl || '').toString().trim(),
+      requiredRuntime: (requiredRuntime || '15+ Days').toString().trim(),
+      orderIndex: db.modules.length + 1,
+    };
+
+    db.modules.push(newPanel);
+
+    // If specific customers were assigned
+    if (Array.isArray(assignedCustomerIds) && assignedCustomerIds.length > 0) {
+      db.customers.forEach(cust => {
+        if (assignedCustomerIds.includes(cust.id) || assignedCustomerIds.includes(cust.customer_id)) {
+          if (!cust.assigned_modules.includes(newPanel.id)) {
+            cust.assigned_modules.push(newPanel.id);
+            cust.updated_at = new Date().toISOString();
+          }
+        }
+      });
+    }
+
+    saveDatabase(db);
+
+    const enriched = getEnrichedPanels(db).find(p => p.id === newPanel.id);
+    return res.status(201).json({
+      success: true,
+      message: `Panel "${newPanel.name}" created successfully.`,
+      module: enriched || newPanel,
+      panel: enriched || newPanel,
+    });
+  });
+
+  // Edit Panel
+  app.put(["/api/admin/modules/:id", "/api/admin/panels/:id"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const panelIdx = db.modules.findIndex(m => m.id === id);
+
+    if (panelIdx === -1) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    const current = db.modules[panelIdx];
+    const {
+      name,
+      description,
+      tag,
+      version,
+      enabled,
+      status,
+      price,
+      icon,
+      imageUrl,
+      requiredRuntime,
+      assignedCustomerIds,
+    } = req.body;
+
+    if (name) current.name = name.toString().trim().toUpperCase();
+    if (typeof description !== 'undefined') current.description = description.toString().trim();
+    if (tag) current.tag = tag.toString().trim().toUpperCase();
+    if (version) current.version = version.toString().trim();
+    if (typeof enabled !== 'undefined') current.enabled = Boolean(enabled);
+    if (status) current.status = status === 'inactive' ? 'inactive' : 'active';
+    if (typeof price !== 'undefined') current.price = Number(price);
+    if (icon) current.icon = icon;
+    if (typeof imageUrl !== 'undefined') current.imageUrl = imageUrl.toString().trim();
+    if (requiredRuntime) current.requiredRuntime = requiredRuntime.toString().trim();
+
+    db.modules[panelIdx] = current;
+
+    // Synchronize customer assignments if provided
+    if (Array.isArray(assignedCustomerIds)) {
+      db.customers.forEach(cust => {
+        const shouldHave = assignedCustomerIds.includes(cust.id) || assignedCustomerIds.includes(cust.customer_id);
+        const hasIt = cust.assigned_modules.includes(id);
+
+        if (shouldHave && !hasIt) {
+          cust.assigned_modules.push(id);
+          cust.updated_at = new Date().toISOString();
+        } else if (!shouldHave && hasIt) {
+          cust.assigned_modules = cust.assigned_modules.filter(mId => mId !== id);
+          cust.updated_at = new Date().toISOString();
+        }
+      });
+    }
+
+    saveDatabase(db);
+
+    const enriched = getEnrichedPanels(db).find(p => p.id === id);
+    return res.json({
+      success: true,
+      message: `Panel "${current.name}" updated successfully.`,
+      module: enriched || current,
+      panel: enriched || current,
+    });
+  });
+
+  // Toggle Panel Status
+  app.post(["/api/admin/modules/:id/toggle", "/api/admin/panels/:id/toggle"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const panel = db.modules.find(m => m.id === id);
+
+    if (!panel) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    panel.enabled = !panel.enabled;
+    panel.status = panel.enabled ? 'active' : 'inactive';
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: `Panel "${panel.name}" is now ${panel.enabled ? 'ENABLED' : 'DISABLED'}.`,
+      module: panel,
+      panel,
+    });
+  });
+
+  // Assign / Unassign Customers to Panel
+  app.post(["/api/admin/modules/:id/assign", "/api/admin/panels/:id/assign"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const { assignedCustomerIds } = req.body;
+
+    const panel = db.modules.find(m => m.id === id);
+    if (!panel) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    if (Array.isArray(assignedCustomerIds)) {
+      db.customers.forEach(cust => {
+        const shouldHave = assignedCustomerIds.includes(cust.id) || assignedCustomerIds.includes(cust.customer_id);
+        const hasIt = cust.assigned_modules.includes(id);
+
+        if (shouldHave && !hasIt) {
+          cust.assigned_modules.push(id);
+          cust.updated_at = new Date().toISOString();
+        } else if (!shouldHave && hasIt) {
+          cust.assigned_modules = cust.assigned_modules.filter(mId => mId !== id);
+          cust.updated_at = new Date().toISOString();
+        }
+      });
+      saveDatabase(db);
+    }
+
+    const enriched = getEnrichedPanels(db).find(p => p.id === id);
+    return res.json({
+      success: true,
+      message: `Panel access updated successfully.`,
+      module: enriched || panel,
+      panel: enriched || panel,
+    });
+  });
+
+  // Delete Panel
+  app.delete(["/api/admin/modules/:id", "/api/admin/panels/:id"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const initialLen = db.modules.length;
+    db.modules = db.modules.filter(m => m.id !== id);
+
+    if (db.modules.length === initialLen) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    // Clean up assignments from all customers
+    db.customers.forEach(cust => {
+      if (cust.assigned_modules.includes(id)) {
+        cust.assigned_modules = cust.assigned_modules.filter(mId => mId !== id);
+        cust.updated_at = new Date().toISOString();
+      }
+    });
+
+    saveDatabase(db);
+    return res.json({
+      success: true,
+      message: "Panel permanently deleted.",
+    });
+  });
+
+  // Customer Portal Configuration Route (Only returns assigned panels for authenticated customer)
+  app.get("/api/portal/config", (req, res) => {
+    db = loadDatabase();
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    const userId = (req.query.userId || req.query.username || "").toString();
+
+    let targetCustomer: StoredCustomer | undefined;
+
+    if (token && token.startsWith("cust_")) {
+      const match = token.match(/^cust_([^_]+)_/);
+      if (match) {
+        targetCustomer = db.customers.find(c => c.id === match[1] || c.customer_id === match[1]);
+      }
+    }
+
+    if (!targetCustomer && userId) {
+      targetCustomer = db.customers.find(
+        c => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase()
+      );
+    }
+
+    // If target customer found, filter to only assigned enabled panels
+    let accessibleModules = db.modules;
+    if (targetCustomer) {
+      const assignedIds = Array.isArray(targetCustomer.assigned_modules) ? targetCustomer.assigned_modules : [];
+      accessibleModules = db.modules.filter(m => assignedIds.includes(m.id) && m.enabled !== false);
+    }
+
+    return res.json({
+      modules: accessibleModules.map(m => ({
+        ...m,
+        imageUrl: m.imageUrl || '',
+        price: m.price || 120,
+      })),
+      plans: [
+        { id: 'plan-15', name: '15 DAYS ACCESS', durationDays: 15, defaultPrice: targetCustomer?.price || 120, userPrice: targetCustomer?.price || 120, status: 'active', badge: 'STANDARD', description: '15 days full tactical access pass', hasCustomPrice: true },
+        { id: 'plan-30', name: '30 DAYS ACCESS', durationDays: 30, defaultPrice: (targetCustomer?.price || 120) * 1.5, userPrice: (targetCustomer?.price || 120) * 1.5, status: 'active', badge: 'RECOMMENDED', description: '30 days extended access pass', hasCustomPrice: true },
+      ],
+      userLicenses: [],
+      upiQrImage: '',
+    });
   });
 
   // SPA Static / Vite dev server

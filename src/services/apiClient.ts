@@ -316,6 +316,27 @@ export const apiClient = {
     upiQrImage: string;
     settings: any;
   }> {
+    try {
+      const token = this.getAuthToken();
+      const queryParam = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+      const res = await fetch(`/api/portal/config${queryParam}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.modules)) {
+          return {
+            modules: data.modules,
+            plans: data.plans || [],
+            userLicenses: data.userLicenses || [],
+            upiQrImage: data.upiQrImage || '',
+            settings: data.settings || {},
+          };
+        }
+      }
+    } catch {
+      // fallback
+    }
     return appStore.getPortalConfig(userId);
   },
 
@@ -435,29 +456,125 @@ export const apiClient = {
   },
 
   // ==========================================
-  // ADMIN: MODULES
+  // ADMIN: ACCESS PANELS & MODULES
   // ==========================================
   async getModules(): Promise<CyberModule[]> {
+    try {
+      const res = await fetch('/api/admin/modules', {
+        headers: { 'Authorization': `Bearer ${this.getAdminToken()}` },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // fallback
+    }
     return appStore.getModules();
   },
 
   async createModule(modData: Partial<CyberModule>): Promise<CyberModule> {
+    try {
+      const res = await fetch('/api/admin/modules', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getAdminToken()}`,
+        },
+        body: JSON.stringify(modData),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Sync local store
+        appStore.createModule(data.module || data.panel || modData);
+        return data.module || data.panel;
+      }
+    } catch {
+      // fallback
+    }
     const res = appStore.createModule(modData);
     return res.module;
   },
 
   async updateModule(modId: string, modData: Partial<CyberModule>): Promise<CyberModule> {
+    try {
+      const res = await fetch(`/api/admin/modules/${modId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getAdminToken()}`,
+        },
+        body: JSON.stringify(modData),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        appStore.updateModule(modId, data.module || data.panel || modData);
+        return data.module || data.panel;
+      }
+    } catch {
+      // fallback
+    }
     const res = appStore.updateModule(modId, modData);
     return res.module;
   },
 
   async toggleModule(modId: string): Promise<CyberModule> {
+    try {
+      const res = await fetch(`/api/admin/modules/${modId}/toggle`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.getAdminToken()}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        appStore.toggleModuleStatus(modId);
+        return data.module || data.panel;
+      }
+    } catch {
+      // fallback
+    }
     const res = appStore.toggleModuleStatus(modId);
     return res.module;
   },
 
   async deleteModule(modId: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/admin/modules/${modId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.getAdminToken()}`,
+        },
+      });
+      if (res.ok) {
+        appStore.deleteModule(modId);
+        return;
+      }
+    } catch {
+      // fallback
+    }
     appStore.deleteModule(modId);
+  },
+
+  async assignCustomersToPanel(panelId: string, assignedCustomerIds: string[]): Promise<CyberModule> {
+    try {
+      const res = await fetch(`/api/admin/modules/${panelId}/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getAdminToken()}`,
+        },
+        body: JSON.stringify({ assignedCustomerIds }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        appStore.updateModule(panelId, { assignedCustomerIds });
+        return data.module || data.panel;
+      }
+    } catch {
+      // fallback
+    }
+    const res = appStore.updateModule(panelId, { assignedCustomerIds });
+    return res.module;
   },
 
   // ==========================================

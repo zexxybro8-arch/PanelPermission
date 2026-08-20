@@ -7,9 +7,14 @@ export interface CyberModule {
   tag: string;
   version: string;
   enabled: boolean;
+  status?: 'active' | 'inactive';
+  price?: number;
   icon?: string;
+  imageUrl?: string;
   requiredRuntime?: string;
   orderIndex?: number;
+  assignedCustomers?: Array<{ id: string; customer_id: string; username: string }>;
+  assignedCustomerIds?: string[];
 }
 
 export interface UserProfile {

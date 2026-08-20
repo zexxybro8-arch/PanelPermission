@@ -111,6 +111,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
       highlight: true, 
       badge: 'PRO' 
     },
+    { id: 'modules', label: 'ACCESS PANELS', icon: Boxes, highlight: true, badge: `${modules.length}` },
     { id: 'overview', label: 'OVERVIEW', icon: LayoutDashboard },
     { id: 'users', label: 'USER DIRECTORY', icon: Users, badge: `${users.length}` },
     { 
@@ -121,7 +122,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
       badge: 'CUSTOM' 
     },
     { id: 'plans', label: 'RUNTIME PLANS', icon: Layers, badge: `${plans.length}` },
-    { id: 'modules', label: 'MODULES', icon: Boxes, badge: `${modules.length}` },
     { id: 'orders', label: 'ORDERS & PAYMENTS', icon: ShoppingCart, badge: `${orders.filter(o => o.paymentStatus === 'PENDING').length || ''}` },
     { id: 'licenses', label: 'LICENSES & KEYS', icon: Key, badge: `${licenses.length}` },
     { id: 'sessions', label: 'USER SESSIONS', icon: ShieldAlert, badge: `${sessions.length}` },
