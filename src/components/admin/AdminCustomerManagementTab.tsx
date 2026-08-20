@@ -1992,11 +1992,22 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <div>
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/40">
-                  PANEL PERMISSIONS & ACCESS CONTROL
+                  INDIVIDUAL PERMISSION & ACCESS MANAGEMENT
                 </span>
                 <h3 className="text-lg font-display font-bold text-white mt-1">
-                  CUSTOMER: {permissionsModalCustomer.customer_id} ({permissionsModalCustomer.username})
+                  CUSTOMER: {permissionsModalCustomer.customer_id} // {permissionsModalCustomer.username}
                 </h3>
+                <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-slate-300">
+                  <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800">
+                    STATUS: <strong className={permissionsModalCustomer.status === 'blocked' ? 'text-rose-400' : 'text-emerald-400'}>{permissionsModalCustomer.status.toUpperCase()}</strong>
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800">
+                    PRICE: <strong className="text-cyan-300">₹{permissionsModalCustomer.price}</strong>
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800">
+                    EXPIRY: <strong className="text-slate-200">{permissionsModalCustomer.expiry_date ? permissionsModalCustomer.expiry_date.split('T')[0] : 'N/A'}</strong>
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => setPermissionsModalCustomer(null)}

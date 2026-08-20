@@ -55,15 +55,15 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [imageErrorMap, setImageErrorMap] = useState<Record<string, boolean>>({});
 
-  const [lockedAlert, setLockedAlert] = useState<{ moduleName: string; type: string } | null>(null);
+  const [lockedAlert, setLockedAlert] = useState<{ moduleName: string; type: 'VERIFY' | 'FILES' | 'SETUP'; reason?: string } | null>(null);
   const [activeVerifyModule, setActiveVerifyModule] = useState<CyberModule | null>(null);
   const [activeFilesModule, setActiveFilesModule] = useState<CyberModule | null>(null);
   const [activeSetupModule, setActiveSetupModule] = useState<CyberModule | null>(null);
 
-  const handleOptionClick = (mod: CyberModule, type: 'VERIFY' | 'FILES' | 'SETUP', isAllowed: boolean) => {
+  const handleOptionClick = (mod: CyberModule, type: 'VERIFY' | 'FILES' | 'SETUP', isAllowed: boolean, reason?: string) => {
     cyberAudio.playClick();
     if (!isAllowed) {
-      setLockedAlert({ moduleName: mod.name, type });
+      setLockedAlert({ moduleName: mod.name, type, reason });
       return;
     }
     if (type === 'VERIFY') setActiveVerifyModule(mod);
@@ -338,13 +338,23 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
             const hasLicense = isCustomerModule || userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
             const hasValidImage = !!mod.imageUrl && !imageErrorMap[mod.id];
 
-            const panelPerms = user.panel_permissions?.[mod.id] || {
-              verify_access: hasLicense,
-              files_access: hasLicense,
-              setup_access: hasLicense,
-              purchased: hasLicense,
-              payment_status: hasLicense ? 'approved' : 'none'
+            const isBlocked = user.status === 'blocked';
+            const isExpired = daysRemaining !== null && daysRemaining < 0;
+
+            const rawPerms = user.panel_permissions?.[mod.id];
+            const panelPerms = {
+              verify_access: !isBlocked && !isExpired && Boolean(rawPerms?.verify_access),
+              files_access: !isBlocked && !isExpired && Boolean(rawPerms?.files_access),
+              setup_access: !isBlocked && !isExpired && Boolean(rawPerms?.setup_access),
+              purchased: Boolean(rawPerms?.purchased),
+              payment_status: rawPerms?.payment_status || (rawPerms?.purchased ? 'approved' : 'none'),
             };
+
+            const blockReason = isBlocked
+              ? 'ACCOUNT BLOCKED: Please contact administrator.'
+              : isExpired
+              ? 'SUBSCRIPTION EXPIRED: Please renew runtime plan.'
+              : 'Contact administrator to request access.';
 
             return (
               <motion.div
@@ -408,7 +418,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                     {/* 1. VERIFY */}
                     <button
                       type="button"
-                      onClick={() => handleOptionClick(mod, 'VERIFY', panelPerms.verify_access)}
+                      onClick={() => handleOptionClick(mod, 'VERIFY', panelPerms.verify_access, blockReason)}
                       className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         panelPerms.verify_access
                           ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
@@ -423,7 +433,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                     {/* 2. FILES */}
                     <button
                       type="button"
-                      onClick={() => handleOptionClick(mod, 'FILES', panelPerms.files_access)}
+                      onClick={() => handleOptionClick(mod, 'FILES', panelPerms.files_access, blockReason)}
                       className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         panelPerms.files_access
                           ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
@@ -438,7 +448,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                     {/* 3. SETUP */}
                     <button
                       type="button"
-                      onClick={() => handleOptionClick(mod, 'SETUP', panelPerms.setup_access)}
+                      onClick={() => handleOptionClick(mod, 'SETUP', panelPerms.setup_access, blockReason)}
                       className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         panelPerms.setup_access
                           ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
@@ -502,19 +512,24 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
               <div className="w-10 h-10 rounded-xl bg-amber-950 border border-amber-500/60 flex items-center justify-center text-amber-400 shrink-0">
                 <Lock className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-display font-bold text-white">
-                ACCESS LOCKED
-              </h3>
+              <div>
+                <h3 className="text-sm font-display font-bold text-white uppercase tracking-wide">
+                  {lockedAlert.type} ACCESS IS CURRENTLY LOCKED
+                </h3>
+                <span className="text-[10px] text-amber-400/80 font-mono-code">
+                  {lockedAlert.moduleName}
+                </span>
+              </div>
             </div>
-            <p className="text-amber-200/90 leading-relaxed mb-4">
-              Please contact the administrator or wait for permission.
+            <p className="text-amber-200/90 leading-relaxed mb-4 bg-slate-950 p-3 rounded-xl border border-slate-800">
+              {lockedAlert.reason || 'Contact administrator to request access.'}
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setLockedAlert(null)}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300"
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition-colors cursor-pointer"
               >
-                CLOSE
+                DISMISS
               </button>
             </div>
           </div>
