@@ -283,6 +283,7 @@ export default function App() {
         {/* Top Cyber System Bar - Clicking AEGIS logo opens Admin Login */}
         <CyberHeader
           onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
+          user={user}
         />
 
         {/* Main Content Area */}
