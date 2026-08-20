@@ -116,6 +116,8 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [serverQrImage, setServerQrImage] = useState<string>(upiQrImage || DEFAULT_QR_IMAGE);
+  const [cancelState, setCancelState] = useState<'idle' | 'cancelling' | 'cancelled'>('idle');
+  const [cancelProgress, setCancelProgress] = useState<number>(0);
 
   // Initialize selectedPlan once when modal opens or module changes. Do NOT overwrite on plans refetch.
   useEffect(() => {
@@ -151,6 +153,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
   if (!isOpen || !module) return null;
 
   const handleClose = () => {
+    if (cancelState !== 'idle') return;
     cyberAudio.playClick(900);
     setCheckoutStep('plans');
     setTimeLeft(INITIAL_TIMER_SECONDS);
@@ -158,6 +161,39 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
     setVerificationStatus(null);
     setActiveOrderId(null);
     onClose();
+  };
+
+  const handleCancelPayment = () => {
+    if (cancelState !== 'idle') return;
+
+    cyberAudio.playClick(800);
+    setCancelState('cancelling');
+    setCancelProgress(0);
+
+    const steps = [0, 25, 50, 75, 100];
+    let stepIndex = 0;
+
+    // Transition smoothly through 0 -> 25 -> 50 -> 75 -> 100 over ~1.6 seconds (400ms per step)
+    const interval = setInterval(() => {
+      stepIndex += 1;
+      if (stepIndex < steps.length) {
+        setCancelProgress(steps[stepIndex]);
+      } else {
+        clearInterval(interval);
+        setCancelState('cancelled');
+        cyberAudio.playClick(600);
+
+        // Keep confirmation visible for exactly 1 second, then navigate back to plans
+        setTimeout(() => {
+          setCheckoutStep('plans');
+          setCancelState('idle');
+          setCancelProgress(0);
+          setTimeLeft(INITIAL_TIMER_SECONDS);
+          setVerificationStatus(null);
+          setActiveOrderId(null);
+        }, 1000);
+      }
+    }, 400);
   };
 
   const handleSelectPlan = (plan: RuntimePlanItem) => {
@@ -726,14 +762,116 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={handleClose}
-                  className="w-full py-2.5 px-6 rounded-xl font-mono-code text-xs text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-slate-800 transition-all text-center cursor-pointer"
+                  onClick={handleCancelPayment}
+                  disabled={cancelState !== 'idle'}
+                  className="w-full py-2.5 px-6 rounded-xl font-mono-code text-xs text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-slate-800 transition-all text-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  CANCEL PAYMENT
+                  {cancelState !== 'idle' ? 'CANCELLING...' : 'CANCEL PAYMENT'}
                 </button>
               </div>
             </div>
           )}
+
+          {/* Professional Cyber-Security Cancellation Overlay */}
+          <AnimatePresence>
+            {cancelState !== 'idle' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-50 bg-[#02050c]/98 flex flex-col items-center justify-center p-6 text-center backdrop-blur-md rounded-3xl"
+              >
+                {cancelState === 'cancelling' ? (
+                  <div className="space-y-6 flex flex-col items-center">
+                    {/* Glowing Tech Header */}
+                    <div className="space-y-1.5">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono-code font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-widest animate-pulse">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>SYSTEM OVERRIDE</span>
+                      </div>
+                      <h3 className="font-display font-bold text-xl sm:text-2xl text-white tracking-widest uppercase">
+                        CANCELLING PAYMENT...
+                      </h3>
+                      <p className="text-xs font-mono-code text-slate-400">
+                        Terminating active payment gateway handshake
+                      </p>
+                    </div>
+
+                    {/* Circular Progress Widget */}
+                    <div className="relative w-32 h-32 flex items-center justify-center">
+                      <svg className="w-28 h-28 transform -rotate-90">
+                        {/* Background track */}
+                        <circle
+                          cx="56"
+                          cy="56"
+                          r="45"
+                          className="stroke-slate-900"
+                          strokeWidth="5"
+                          fill="transparent"
+                        />
+                        {/* Interactive glow ring */}
+                        <circle
+                          cx="56"
+                          cy="56"
+                          r="45"
+                          className="stroke-amber-500/40 blur-[3px]"
+                          strokeWidth="7"
+                          fill="transparent"
+                          strokeDasharray={2 * Math.PI * 45}
+                          strokeDashoffset={2 * Math.PI * 45 - (cancelProgress / 100) * 2 * Math.PI * 45}
+                        />
+                        {/* Solid progress ring */}
+                        <circle
+                          cx="56"
+                          cy="56"
+                          r="45"
+                          className="stroke-amber-500 transition-all duration-300 ease-out"
+                          strokeWidth="5"
+                          fill="transparent"
+                          strokeDasharray={2 * Math.PI * 45}
+                          strokeDashoffset={2 * Math.PI * 45 - (cancelProgress / 100) * 2 * Math.PI * 45}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      {/* Percent text */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="font-display font-black text-xl text-white tracking-tighter">
+                          {cancelProgress}%
+                        </span>
+                        <span className="text-[9px] font-mono-code text-slate-500 uppercase tracking-widest">
+                          PROGRESS
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="space-y-6 flex flex-col items-center"
+                  >
+                    {/* Red status icon */}
+                    <div className="w-16 h-16 rounded-full bg-rose-500/20 border border-rose-500 flex items-center justify-center text-rose-500 shadow-[0_0_25px_rgba(239,68,68,0.4)] animate-bounce">
+                      <AlertCircle className="w-8 h-8" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h3 className="font-display font-bold text-2xl text-rose-500 tracking-wider uppercase">
+                        PAYMENT CANCELLED
+                      </h3>
+                      <p className="text-sm font-mono-code text-slate-300 max-w-xs mx-auto leading-relaxed">
+                        Your payment session has been cancelled successfully.
+                      </p>
+                    </div>
+
+                    <div className="text-[10px] font-mono-code text-slate-500 tracking-wider uppercase animate-pulse">
+                      Redirecting to order control panel...
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </AnimatePresence>
