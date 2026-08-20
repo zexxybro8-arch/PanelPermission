@@ -411,8 +411,11 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
       {/* CREATE NEW USER MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-5 my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+          <div 
+            className="w-full max-w-lg rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-5 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-cyan-400" />
@@ -650,8 +653,11 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
       {/* POST-CREATION CREDENTIALS POPUP MODAL WITH COPY BUTTONS */}
       {createdCredentialsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-          <div className="w-full max-w-md rounded-3xl cyber-glass p-7 border border-emerald-500/50 shadow-[0_0_80px_rgba(16,185,129,0.3)] bg-slate-950 space-y-5 relative overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl overflow-hidden">
+          <div 
+            className="w-full max-w-md rounded-3xl cyber-glass p-7 border border-emerald-500/50 shadow-[0_0_80px_rgba(16,185,129,0.3)] bg-slate-950 space-y-5 relative my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-500" />
             
             <div className="text-center space-y-1.5">
@@ -723,8 +729,11 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
       {/* RESET PASS KEY MODAL */}
       {resetModalUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-md rounded-3xl cyber-glass p-6 border border-cyan-500/40 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+          <div 
+            className="w-full max-w-md rounded-3xl cyber-glass p-6 border border-cyan-500/40 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-4 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Key className="w-4 h-4 text-cyan-400" />

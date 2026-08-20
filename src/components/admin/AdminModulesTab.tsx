@@ -412,8 +412,11 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
       {/* ADD PANEL MODAL */}
       {/* ======================================================== */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-5 my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+          <div 
+            className="w-full max-w-lg rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-5 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
@@ -640,8 +643,11 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
       {/* EDIT PANEL MODAL */}
       {/* ======================================================== */}
       {editingModule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-5 my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+          <div 
+            className="w-full max-w-lg rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-5 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
@@ -815,8 +821,11 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
       {/* ASSIGN CUSTOMERS MODAL */}
       {/* ======================================================== */}
       {assigningModule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-md rounded-3xl cyber-glass p-6 border border-cyan-500/30 shadow-[0_0_50px_rgba(0,242,254,0.2)] bg-slate-950 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+          <div 
+            className="w-full max-w-md rounded-3xl cyber-glass p-6 border border-cyan-500/30 shadow-[0_0_50px_rgba(0,242,254,0.2)] bg-slate-950 space-y-4 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2 text-cyan-400">
                 <Users className="w-5 h-5" />
@@ -909,8 +918,11 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
       {/* DELETE CONFIRMATION MODAL */}
       {/* ======================================================== */}
       {deletingModule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-sm rounded-3xl cyber-glass p-6 border border-rose-500/40 shadow-[0_0_50px_rgba(244,63,94,0.2)] bg-slate-950 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+          <div 
+            className="w-full max-w-sm rounded-3xl cyber-glass p-6 border border-rose-500/40 shadow-[0_0_50px_rgba(244,63,94,0.2)] bg-slate-950 space-y-4 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             <div className="flex items-center gap-2 text-rose-400">
               <AlertTriangle className="w-5 h-5" />
               <h3 className="font-display font-bold text-base text-white">

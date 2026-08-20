@@ -203,7 +203,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
       </header>
 
       {/* Main Admin Body: Sidebar + Dynamic Content Canvas */}
-      <div className="flex-1 flex relative z-10">
+      <div className="flex-1 flex relative">
         {/* Sidebar Navigation (Desktop) */}
         <aside className="w-64 border-r border-slate-800/80 bg-slate-950/60 backdrop-blur-md p-4 hidden lg:flex flex-col justify-between shrink-0 space-y-6">
           <div className="space-y-1.5">
