@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "customers": {
+      "fields": {
+        "id": { "type": "string", "description": "Unique record ID" },
+        "customer_id": { "type": "string", "description": "Human readable customer ID e.g. CUST-1001" },
+        "username": { "type": "string", "description": "Customer login username" },
+        "password_hash": { "type": "string", "description": "Customer password string/hash" },
+        "display_name": { "type": "string", "description": "Display name" },
+        "status": { "type": "string", "description": "Account status: active or blocked" },
+        "price": { "type": "number", "description": "Default customer price" },
+        "expiry_date": { "type": "string", "description": "Account expiry timestamp string" },
+        "panel_permissions": { "type": "map", "description": "Map of panel_id to permissions { verify_access, files_access, setup_access, payment_status, purchased }" },
+        "created_at": { "type": "string", "description": "Creation ISO date string" },
+        "updated_at": { "type": "string", "description": "Update ISO date string" }
+      }
+    },
+    "panels": {
+      "fields": {
+        "id": { "type": "string", "description": "Panel module ID e.g. MOD-AEGIS-SENTINEL" },
+        "name": { "type": "string", "description": "Panel title" },
+        "version": { "type": "string", "description": "Panel version string" },
+        "description": { "type": "string", "description": "Panel description string" },
+        "image": { "type": "string", "description": "Image URL or compressed Base64 data" },
+        "status": { "type": "string", "description": "Panel status: active or disabled" },
+        "assignedCustomerIds": { "type": "array", "description": "Array of assigned customer IDs" },
+        "created_at": { "type": "string", "description": "Creation timestamp" },
+        "updated_at": { "type": "string", "description": "Update timestamp" }
+      }
+    },
+    "plans": {
+      "fields": {
+        "id": { "type": "string", "description": "Plan ID" },
+        "panel_id": { "type": "string", "description": "Associated panel ID" },
+        "name": { "type": "string", "description": "Plan name" },
+        "price": { "type": "number", "description": "Plan price" },
+        "duration_days": { "type": "number", "description": "Duration in days" },
+        "status": { "type": "string", "description": "Plan status" },
+        "created_at": { "type": "string", "description": "Creation timestamp" },
+        "updated_at": { "type": "string", "description": "Update timestamp" }
+      }
+    },
+    "customer_panels": {
+      "fields": {
+        "id": { "type": "string", "description": "Record ID" },
+        "customer_id": { "type": "string", "description": "Customer ID" },
+        "panel_id": { "type": "string", "description": "Panel ID" },
+        "custom_price": { "type": "number", "description": "Custom panel price for customer" },
+        "payment_status": { "type": "string", "description": "Payment status" },
+        "expiry_date": { "type": "string", "description": "Expiry timestamp" },
+        "created_at": { "type": "string", "description": "Creation timestamp" },
+        "updated_at": { "type": "string", "description": "Update timestamp" }
+      }
+    },
+    "customer_permissions": {
+      "fields": {
+        "id": { "type": "string", "description": "Record ID" },
+        "customer_id": { "type": "string", "description": "Customer ID" },
+        "panel_id": { "type": "string", "description": "Panel ID" },
+        "verify": { "type": "boolean", "description": "Verify permission ON/OFF" },
+        "files": { "type": "boolean", "description": "Files permission ON/OFF" },
+        "setup": { "type": "boolean", "description": "Setup permission ON/OFF" },
+        "created_at": { "type": "string", "description": "Creation timestamp" },
+        "updated_at": { "type": "string", "description": "Update timestamp" }
+      }
+    },
+    "orders": {
+      "fields": {
+        "id": { "type": "string", "description": "Order ID" },
+        "customer_id": { "type": "string", "description": "Customer ID" },
+        "username": { "type": "string", "description": "Customer username" },
+        "panel_id": { "type": "string", "description": "Panel ID" },
+        "plan_id": { "type": "string", "description": "Plan ID" },
+        "amount": { "type": "number", "description": "Order amount" },
+        "duration_days": { "type": "number", "description": "Duration in days" },
+        "payment_status": { "type": "string", "description": "PENDING, PAID, or CANCELLED" },
+        "transaction_reference": { "type": "string", "description": "Transaction reference" },
+        "created_at": { "type": "string", "description": "Creation timestamp" },
+        "updated_at": { "type": "string", "description": "Update timestamp" }
+      }
+    },
+    "admin_users": {
+      "fields": {
+        "id": { "type": "string", "description": "User ID" },
+        "username": { "type": "string", "description": "Admin username" },
+        "password_hash": { "type": "string", "description": "Password string/hash" },
+        "role": { "type": "string", "description": "Role: admin or user" },
+        "clearance_level": { "type": "number", "description": "Clearance level e.g. 5" },
+        "created_at": { "type": "string", "description": "Creation timestamp" }
+      }
+    },
+    "activity_logs": {
+      "fields": {
+        "id": { "type": "string", "description": "Log ID" },
+        "actor": { "type": "string", "description": "Actor username" },
+        "action": { "type": "string", "description": "Action name" },
+        "target": { "type": "string", "description": "Target entity" },
+        "status": { "type": "string", "description": "SUCCESS or FAILED" },
+        "details": { "type": "string", "description": "Details description" },
+        "timestamp": { "type": "string", "description": "Timestamp string" }
+      }
+    },
+    "system_settings": {
+      "fields": {
+        "id": { "type": "string", "description": "Document ID" },
+        "gateway_version": { "type": "string", "description": "Gateway version" },
+        "maintenance_mode": { "type": "boolean", "description": "Maintenance mode boolean" },
+        "require_pow": { "type": "boolean", "description": "Require Proof of Work" },
+        "default_node": { "type": "string", "description": "Default node cluster" },
+        "upi_qr_url": { "type": "string", "description": "UPI QR image URL" },
+        "admin_upi_id": { "type": "string", "description": "Admin UPI ID" },
+        "auto_approve_orders": { "type": "boolean", "description": "Auto approve orders" }
+      }
+    }
+  }
+}

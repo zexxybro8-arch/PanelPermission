@@ -1,4 +1,13 @@
 import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import { db } from '../services/firebase';
+import {
   AdminUser,
   UserCustomPricing,
   AdminRuntimePlan,
@@ -56,12 +65,188 @@ export class AppStore {
 
   constructor() {
     this.state = this.loadFromStorage();
+    this.initRealtimeSync();
+  }
+
+  private initRealtimeSync() {
+    try {
+      // 1. Customers real-time listener
+      onSnapshot(collection(db, 'customers'), (snapshot) => {
+        const list: StoredCustomerRecord[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as StoredCustomerRecord);
+        });
+        if (list.length > 0) {
+          this.state.customers = list;
+          this.saveToStorageOnly();
+          this.notify();
+        }
+      }, (err) => console.warn('Firestore customers sync error:', err));
+
+      // 2. Modules / Panels real-time listener
+      onSnapshot(collection(db, 'modules'), (snapshot) => {
+        const list: CyberModule[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as CyberModule);
+        });
+        if (list.length > 0) {
+          this.state.modules = list;
+          this.saveToStorageOnly();
+          this.notify();
+        }
+      }, (err) => console.warn('Firestore modules sync error:', err));
+
+      // 3. Plans real-time listener
+      onSnapshot(collection(db, 'plans'), (snapshot) => {
+        const list: AdminRuntimePlan[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as AdminRuntimePlan);
+        });
+        if (list.length > 0) {
+          this.state.runtimePlans = list;
+          this.saveToStorageOnly();
+          this.notify();
+        }
+      }, (err) => console.warn('Firestore plans sync error:', err));
+
+      // 4. Orders real-time listener
+      onSnapshot(collection(db, 'orders'), (snapshot) => {
+        const list: AdminOrder[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as AdminOrder);
+        });
+        this.state.orders = list;
+        this.saveToStorageOnly();
+        this.notify();
+      }, (err) => console.warn('Firestore orders sync error:', err));
+
+      // 5. Users real-time listener
+      onSnapshot(collection(db, 'users'), (snapshot) => {
+        const list: StoredUserAccount[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as StoredUserAccount);
+        });
+        if (list.length > 0) {
+          this.state.users = list;
+          this.saveToStorageOnly();
+          this.notify();
+        }
+      }, (err) => console.warn('Firestore users sync error:', err));
+
+      // 6. Custom Pricing real-time listener
+      onSnapshot(collection(db, 'userPricing'), (snapshot) => {
+        const map: Record<string, UserCustomPricing> = {};
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as UserCustomPricing;
+          if (data && data.userId) {
+            map[data.userId] = data;
+          }
+        });
+        this.state.userPricing = map;
+        this.saveToStorageOnly();
+        this.notify();
+      }, (err) => console.warn('Firestore userPricing sync error:', err));
+
+      // 7. System Settings real-time listener
+      onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+        if (docSnap.exists()) {
+          this.state.settings = docSnap.data() as SystemSettingsData;
+          this.saveToStorageOnly();
+          this.notify();
+        }
+      }, (err) => console.warn('Firestore settings sync error:', err));
+
+      // Seed initial data if Firestore database is empty
+      this.seedFirestoreIfEmpty();
+    } catch (err) {
+      console.error('Failed to initialize Firestore real-time sync:', err);
+    }
+  }
+
+  private async seedFirestoreIfEmpty() {
+    try {
+      const custSnap = await getDocs(collection(db, 'customers'));
+      if (custSnap.empty) {
+        for (const c of this.state.customers) {
+          await this.syncDocToFirestore('customers', c.id, c);
+        }
+      }
+
+      const modSnap = await getDocs(collection(db, 'modules'));
+      if (modSnap.empty) {
+        for (const m of this.state.modules) {
+          await this.syncDocToFirestore('modules', m.id, m);
+        }
+      }
+
+      const planSnap = await getDocs(collection(db, 'plans'));
+      if (planSnap.empty) {
+        for (const p of this.state.runtimePlans) {
+          await this.syncDocToFirestore('plans', p.id, p);
+        }
+      }
+
+      const userSnap = await getDocs(collection(db, 'users'));
+      if (userSnap.empty) {
+        for (const u of this.state.users) {
+          await this.syncDocToFirestore('users', u.id, u);
+        }
+      }
+
+      const settingsSnap = await getDocs(collection(db, 'settings'));
+      if (settingsSnap.empty) {
+        await this.syncDocToFirestore('settings', 'global', this.state.settings);
+      }
+    } catch (err) {
+      console.warn('Failed seeding Firestore:', err);
+    }
+  }
+
+  private saveToStorageOnly(): void {
+    storage.saveAppState(this.state);
+  }
+
+  public async syncDocToFirestore(colName: string, docId: string, data: any) {
+    try {
+      const cleanData = JSON.parse(JSON.stringify(data));
+      await setDoc(doc(db, colName, docId), cleanData, { merge: true });
+    } catch (err) {
+      console.error(`Failed to sync ${colName}/${docId} to Firestore:`, err);
+    }
+  }
+
+  public async deleteDocFromFirestore(colName: string, docId: string) {
+    try {
+      await deleteDoc(doc(db, colName, docId));
+    } catch (err) {
+      console.error(`Failed to delete ${colName}/${docId} from Firestore:`, err);
+    }
   }
 
   private getDefaultState(): AppStoreState {
     const now = new Date().toISOString();
     return {
-      customers: [],
+      customers: [
+        {
+          id: 'CUST-1001',
+          customer_id: 'CUST-1001',
+          username: 'CUST-1001',
+          raw_password: 'PASS1001',
+          display_name: 'TACTICAL CLIENT 1001',
+          status: 'active',
+          price: 120,
+          expiry_date: new Date(Date.now() + 30 * 86400000).toISOString(),
+          assigned_modules: ['MOD-AEGIS-SENTINEL', 'MOD-SPECTRE-FIREWALL', 'MOD-NEURAL-VAULT', 'MOD-CYBER-SCOUT'],
+          panel_permissions: {
+            'MOD-AEGIS-SENTINEL': { verify_access: false, files_access: false, setup_access: false, payment_status: 'none', purchased: false },
+            'MOD-SPECTRE-FIREWALL': { verify_access: false, files_access: false, setup_access: false, payment_status: 'none', purchased: false },
+            'MOD-NEURAL-VAULT': { verify_access: false, files_access: false, setup_access: false, payment_status: 'none', purchased: false },
+            'MOD-CYBER-SCOUT': { verify_access: false, files_access: false, setup_access: false, payment_status: 'none', purchased: false },
+          },
+          created_at: now,
+          updated_at: now,
+        },
+      ],
       users: [
         {
           id: 'USR-SAGAR551',
@@ -476,6 +661,7 @@ export class AppStore {
     this.state.customers.unshift(newCust);
     this.logActivity('SAGAR551', 'CUSTOMER_CREATED', newCust.customer_id, 'SUCCESS', `Created customer ${newCust.username} (${newCust.customer_id})`);
     this.saveToStorage();
+    this.syncDocToFirestore('customers', newCust.id, newCust);
 
     return {
       customer: {
@@ -533,6 +719,7 @@ export class AppStore {
 
     this.logActivity('SAGAR551', 'CUSTOMER_UPDATED', customer.customer_id, 'SUCCESS', `Updated customer ${customer.username}`);
     this.saveToStorage();
+    this.syncDocToFirestore('customers', customer.id, customer);
     return customer;
   }
 
@@ -553,6 +740,7 @@ export class AppStore {
     customer.updated_at = new Date().toISOString();
     this.logActivity('SAGAR551', 'PASSWORD_RESET', customer.customer_id, 'SUCCESS', `Reset password for ${customer.username}`);
     this.saveToStorage();
+    this.syncDocToFirestore('customers', customer.id, customer);
 
     return {
       success: true,
@@ -571,6 +759,7 @@ export class AppStore {
     customer.updated_at = new Date().toISOString();
     this.logActivity('SAGAR551', customer.status === 'blocked' ? 'CUSTOMER_BLOCKED' : 'CUSTOMER_UNBLOCKED', customer.customer_id, 'SUCCESS', `Changed status to ${customer.status}`);
     this.saveToStorage();
+    this.syncDocToFirestore('customers', customer.id, customer);
 
     return {
       success: true,
@@ -592,6 +781,7 @@ export class AppStore {
     customer.updated_at = new Date().toISOString();
     this.logActivity('SAGAR551', 'EXPIRY_EXTENDED', customer.customer_id, 'SUCCESS', `Extended expiry for ${customer.username}`);
     this.saveToStorage();
+    this.syncDocToFirestore('customers', customer.id, customer);
 
     return {
       success: true,
@@ -610,6 +800,9 @@ export class AppStore {
 
     this.logActivity('SAGAR551', 'CUSTOMER_DELETED', target?.customer_id || id, 'SUCCESS', `Deleted customer ${target?.username}`);
     this.saveToStorage();
+    if (target) {
+      this.deleteDocFromFirestore('customers', target.id);
+    }
 
     return {
       success: true,
@@ -659,6 +852,7 @@ export class AppStore {
       `Updated panel ${panelId} permissions for customer ${customer.username}`
     );
     this.saveToStorage();
+    this.syncDocToFirestore('customers', customer.id, customer);
 
     return {
       success: true,
@@ -710,6 +904,7 @@ export class AppStore {
       `Applied ${action} for customer ${customer.username}`
     );
     this.saveToStorage();
+    this.syncDocToFirestore('customers', customer.id, customer);
 
     return {
       success: true,
@@ -751,7 +946,7 @@ export class AppStore {
       // Create an order in orders store
       const orderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
       const mod = this.state.modules.find((m) => m.id === panelId);
-      this.state.orders.unshift({
+      const newOrder = {
         id: orderId,
         userId: customer.id,
         username: customer.username,
@@ -761,14 +956,17 @@ export class AppStore {
         planName: 'Panel License Purchase',
         durationDays: 30,
         finalPrice: customer.price || mod?.price || 120,
-        paymentStatus: 'PENDING',
+        paymentStatus: 'PENDING' as const,
         transactionRef: transactionRef || ('UPI-TXN-' + Math.floor(1000000000 + Math.random() * 9000000000)),
-        paymentMethod: 'UPI_QR',
+        paymentMethod: 'UPI_QR' as const,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      };
+      this.state.orders.unshift(newOrder);
 
       this.saveToStorage();
+      this.syncDocToFirestore('customers', customer.id, customer);
+      this.syncDocToFirestore('orders', newOrder.id, newOrder);
     }
 
     return {
@@ -1214,9 +1412,10 @@ export class AppStore {
     };
 
     this.state.users.push(newUser);
+    this.syncDocToFirestore('users', newUser.id, newUser);
 
     if (userData.customPricing) {
-      this.state.userPricing[userId] = {
+      const customP = {
         id: `PRC-${userId}`,
         userId,
         plan15Price: Number(userData.customPricing.plan15Price || 120),
@@ -1226,6 +1425,8 @@ export class AppStore {
         updatedAt: new Date().toISOString(),
         updatedBy: 'SAGAR551',
       };
+      this.state.userPricing[userId] = customP;
+      this.syncDocToFirestore('userPricing', userId, customP);
     }
 
     let initialLicense = null;
@@ -1279,6 +1480,7 @@ export class AppStore {
     user.accountStatus = status;
     this.logActivity('SAGAR551', 'USER_STATUS_UPDATE', user.username, 'SUCCESS', `Set status to ${status}`);
     this.saveToStorage();
+    this.syncDocToFirestore('users', user.id, user);
     return { success: true, message: `User status changed to ${status}` };
   }
 
@@ -1289,6 +1491,7 @@ export class AppStore {
     user.rawPassKey = generated;
     this.logActivity('SAGAR551', 'PASSKEY_RESET', user.username, 'SUCCESS', `Reset pass key for ${user.username}`);
     this.saveToStorage();
+    this.syncDocToFirestore('users', user.id, user);
     return { success: true, message: 'Pass Key reset successfully', newPassKey: generated };
   }
 
@@ -1299,6 +1502,8 @@ export class AppStore {
     delete this.state.userPricing[user.id];
     this.logActivity('SAGAR551', 'USER_DELETED', user.username, 'SUCCESS', `Deleted user ${user.username}`);
     this.saveToStorage();
+    this.deleteDocFromFirestore('users', user.id);
+    this.deleteDocFromFirestore('userPricing', user.id);
     return { success: true, message: 'User permanently deleted' };
   }
 
@@ -1367,6 +1572,7 @@ export class AppStore {
     this.state.userPricing[user.id] = pricing;
     this.logActivity('SAGAR551', 'PRICING_UPDATED', user.username, 'SUCCESS', `Updated custom rates for ${user.username}`);
     this.saveToStorage();
+    this.syncDocToFirestore('userPricing', user.id, pricing);
     return {
       success: true,
       message: `Custom pricing for ${user.username} saved successfully`,
@@ -1379,6 +1585,7 @@ export class AppStore {
     if (user) {
       delete this.state.userPricing[user.id];
       this.saveToStorage();
+      this.deleteDocFromFirestore('userPricing', user.id);
     }
     return { success: true, message: 'Reset custom pricing to defaults' };
   }
@@ -1406,6 +1613,7 @@ export class AppStore {
     this.state.runtimePlans.push(newPlan);
     this.logActivity('SAGAR551', 'PLAN_CREATED', newPlan.name, 'SUCCESS', `Created plan ${newPlan.name}`);
     this.saveToStorage();
+    this.syncDocToFirestore('plans', newPlan.id, newPlan);
     return { success: true, message: 'Plan created successfully', plan: newPlan };
   }
 
@@ -1415,6 +1623,7 @@ export class AppStore {
     Object.assign(plan, updates);
     this.logActivity('SAGAR551', 'PLAN_UPDATED', plan.name, 'SUCCESS', `Updated plan ${plan.name}`);
     this.saveToStorage();
+    this.syncDocToFirestore('plans', plan.id, plan);
     return { success: true, message: 'Plan updated successfully', plan };
   }
 
@@ -1422,6 +1631,7 @@ export class AppStore {
     this.state.runtimePlans = this.state.runtimePlans.filter((p) => p.id !== id);
     this.logActivity('SAGAR551', 'PLAN_DELETED', id, 'SUCCESS', `Deleted plan ${id}`);
     this.saveToStorage();
+    this.deleteDocFromFirestore('plans', id);
     return { success: true, message: 'Plan deleted successfully' };
   }
 
@@ -1476,6 +1686,7 @@ export class AppStore {
           if (!cust.assigned_modules.includes(newMod.id)) {
             cust.assigned_modules.push(newMod.id);
             cust.updated_at = new Date().toISOString();
+            this.syncDocToFirestore('customers', cust.id, cust);
           }
         }
       });
@@ -1483,6 +1694,7 @@ export class AppStore {
 
     this.logActivity('SAGAR551', 'PANEL_CREATED', newMod.name, 'SUCCESS', `Created panel ${newMod.name}`);
     this.saveToStorage();
+    this.syncDocToFirestore('modules', newMod.id, newMod);
     return { success: true, message: 'Panel created successfully', module: newMod };
   }
 
@@ -1499,15 +1711,18 @@ export class AppStore {
         if (shouldHave && !hasIt) {
           cust.assigned_modules.push(id);
           cust.updated_at = new Date().toISOString();
+          this.syncDocToFirestore('customers', cust.id, cust);
         } else if (!shouldHave && hasIt) {
           cust.assigned_modules = cust.assigned_modules.filter((mId) => mId !== id);
           cust.updated_at = new Date().toISOString();
+          this.syncDocToFirestore('customers', cust.id, cust);
         }
       });
     }
 
     this.logActivity('SAGAR551', 'PANEL_UPDATED', mod.name, 'SUCCESS', `Updated panel ${mod.name}`);
     this.saveToStorage();
+    this.syncDocToFirestore('modules', mod.id, mod);
     return { success: true, message: 'Panel updated successfully', module: mod };
   }
 
@@ -1518,6 +1733,7 @@ export class AppStore {
     mod.status = mod.enabled ? 'active' : 'inactive';
     this.logActivity('SAGAR551', 'PANEL_TOGGLED', mod.name, 'SUCCESS', `Toggled ${mod.name} status to ${mod.enabled}`);
     this.saveToStorage();
+    this.syncDocToFirestore('modules', mod.id, mod);
     return { success: true, message: `Panel status changed to ${mod.enabled ? 'Enabled' : 'Disabled'}`, module: mod };
   }
 
@@ -1529,11 +1745,13 @@ export class AppStore {
         if (cust.assigned_modules.includes(id)) {
           cust.assigned_modules = cust.assigned_modules.filter((mId) => mId !== id);
           cust.updated_at = new Date().toISOString();
+          this.syncDocToFirestore('customers', cust.id, cust);
         }
       });
     }
     this.logActivity('SAGAR551', 'PANEL_DELETED', id, 'SUCCESS', `Deleted panel ${id}`);
     this.saveToStorage();
+    this.deleteDocFromFirestore('modules', id);
     return { success: true, message: 'Panel deleted successfully' };
   }
 
@@ -1584,6 +1802,7 @@ export class AppStore {
 
     this.logActivity('SAGAR551', 'ORDER_STATUS_UPDATE', order.id, 'SUCCESS', `Order ${order.id} marked as ${status}`);
     this.saveToStorage();
+    this.syncDocToFirestore('orders', order.id, order);
 
     return {
       success: true,
@@ -1687,6 +1906,7 @@ export class AppStore {
     Object.assign(this.state.settings, settingsData);
     this.logActivity('SAGAR551', 'SETTINGS_UPDATED', 'CORE_CONFIG', 'SUCCESS', 'Updated system settings');
     this.saveToStorage();
+    this.syncDocToFirestore('settings', 'global', this.state.settings);
     return { success: true, message: 'Settings updated successfully', settings: this.state.settings };
   }
 }
