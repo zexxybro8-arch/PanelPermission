@@ -5,16 +5,9 @@ import { CyberLoginCard } from './components/CyberLoginCard';
 import { CyberDashboard } from './components/CyberDashboard';
 import { SecurityTerminalModal } from './components/SecurityTerminalModal';
 import { AdminPortal } from './components/admin/AdminPortal';
-import { UserProfile, ServerNode, TelemetryLog } from './types';
-import { cyberAudio } from './utils/cyberAudio';
-import { ShieldAlert, ShieldCheck } from 'lucide-react';
-
-const AVAILABLE_NODES: ServerNode[] = [
-  { id: 'sg-01', name: 'SG-01 (Singapore)', region: 'Asia-SE', latencyMs: 12, status: 'optimal', encryption: 'KYBER-1024' },
-  { id: 'tyo-02', name: 'TYO-02 (Tokyo)', region: 'Asia-East', latencyMs: 19, status: 'optimal', encryption: 'KYBER-1024' },
-  { id: 'fra-04', name: 'FRA-04 (Frankfurt)', region: 'EU-Central', latencyMs: 28, status: 'optimal', encryption: 'KYBER-1024' },
-  { id: 'iad-01', name: 'IAD-01 (US-East)', region: 'US-East', latencyMs: 41, status: 'optimal', encryption: 'KYBER-1024' },
-];
+import { AdminLoginModal } from './components/admin/AdminLoginModal';
+import { UserProfile, TelemetryLog } from './types';
+import { apiClient } from './services/apiClient';
 
 const INITIAL_LOGS: TelemetryLog[] = [
   { id: '1', timestamp: '15:32:01', type: 'INFO', source: 'GATEWAY_CORE', message: 'Kyber-1024 quantum lattice session engine initialized', payloadHash: '0x8f..3b' },
@@ -26,8 +19,7 @@ const INITIAL_LOGS: TelemetryLog[] = [
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [selectedNode, setSelectedNode] = useState<ServerNode>(AVAILABLE_NODES[0]);
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'portal' | 'admin'>(() => {
     return window.location.pathname.startsWith('/admin') || window.location.hash === '#admin' ? 'admin' : 'portal';
   });
@@ -38,7 +30,7 @@ export default function App() {
   // Live telemetry stream
   const [logs, setLogs] = useState<TelemetryLog[]>(INITIAL_LOGS);
 
-  // Sync URL state and handle popstate (browser back/forward navigation)
+  // Sync URL state and handle popstate
   useEffect(() => {
     const handlePopState = () => {
       if (window.location.pathname.startsWith('/admin') || window.location.hash === '#admin') {
@@ -66,13 +58,12 @@ export default function App() {
     setCurrentView('portal');
   };
 
-  // Restore authenticated session securely on initial load
+  // Restore authenticated session from localStorage
   useEffect(() => {
     try {
       const storedSession = localStorage.getItem('aegis_auth_session');
       if (storedSession) {
         const parsed = JSON.parse(storedSession);
-        // Validate token integrity and expiration timestamp
         if (
           parsed &&
           parsed.token &&
@@ -80,17 +71,18 @@ export default function App() {
           parsed.expiresAt > Date.now()
         ) {
           const restoredUser: UserProfile = {
-            id: parsed.id || 'USER_10024',
+            id: parsed.id || 'USR-10025',
             username: parsed.username,
             codename: `${parsed.username}_OPERATOR`,
             clearanceLevel: parsed.clearanceLevel || 3,
             role: parsed.role || (parsed.username === 'ADMINXD' ? 'admin' : 'user'),
             terminalId: parsed.terminalId || `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
             ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
-            nodeRegion: parsed.nodeRegion || AVAILABLE_NODES[0].region,
+            nodeRegion: parsed.nodeRegion || 'Asia-SE',
             avatarSeed: parsed.username,
             sessionToken: parsed.token,
             loginTime: new Date(parsed.createdAt || Date.now()).toISOString(),
+            email: parsed.email,
           };
           setUser(restoredUser);
         } else {
@@ -131,26 +123,16 @@ export default function App() {
       };
 
       setLogs((prev) => [...prev.slice(-40), newLog]);
-    }, 6000);
+    }, 7000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const handleToggleAudio = () => {
-    const nextState = !isAudioMuted;
-    setIsAudioMuted(nextState);
-    cyberAudio.setMuted(nextState);
-    if (!nextState) {
-      cyberAudio.playClick(1200);
-    }
-  };
-
   const handleLoginSuccess = (authenticatedUser: UserProfile) => {
     setUser(authenticatedUser);
-    // Securely persist authenticated session descriptor on the device
     try {
       const sessionData = {
-        id: authenticatedUser.id || 'USER_10024',
+        id: authenticatedUser.id || 'USR-10025',
         username: authenticatedUser.username,
         role: authenticatedUser.role,
         token: authenticatedUser.sessionToken,
@@ -158,19 +140,20 @@ export default function App() {
         nodeRegion: authenticatedUser.nodeRegion,
         terminalId: authenticatedUser.terminalId,
         createdAt: Date.now(),
-        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days expiration window
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        email: authenticatedUser.email,
       };
       localStorage.setItem('aegis_auth_session', JSON.stringify(sessionData));
     } catch {
-      // ignore storage quota errors
+      // ignore
     }
   };
 
   const handleLogout = () => {
-    // Clear remembered session on logout
     try {
       localStorage.removeItem('aegis_auth_session');
       localStorage.removeItem('aegis_auth_token');
+      localStorage.removeItem('aegis_admin_token');
     } catch {
       // ignore
     }
@@ -197,15 +180,9 @@ export default function App() {
 
       {/* Main UI Layout Container */}
       <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Top Cyber System Bar */}
+        {/* Top Cyber System Bar - Clicking AEGIS logo opens Admin Login */}
         <CyberHeader
-          onOpenTerminal={() => setIsTerminalOpen(true)}
-          selectedNode={selectedNode}
-          onSelectNode={setSelectedNode}
-          availableNodes={AVAILABLE_NODES}
-          isAudioMuted={isAudioMuted}
-          onToggleAudio={handleToggleAudio}
-          onNavigateAdmin={navigateToAdmin}
+          onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
         />
 
         {/* Main Content Area */}
@@ -215,8 +192,7 @@ export default function App() {
               {/* Main 3D Cyber Login Interface Card */}
               <CyberLoginCard
                 onLoginSuccess={handleLoginSuccess}
-                onOpenTerminal={() => setIsTerminalOpen(true)}
-                selectedRegion={selectedNode.region}
+                selectedRegion="Asia-SE"
               />
             </div>
           ) : (
@@ -230,38 +206,26 @@ export default function App() {
           )}
         </main>
 
-        {/* Global Futuristic Footer */}
-        <footer className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-900/80 text-[11px] font-mono-code text-slate-500 z-10">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>GATEWAY ROUTED VIA {selectedNode.name}</span>
+        {/* Global Premium Trust Footer */}
+        <footer className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 border-t border-slate-900/90 z-10">
+          {/* Trust Statement Capsule */}
+          <div className="flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-950/80 border border-cyan-500/30 shadow-[0_0_20px_-3px_rgba(0,242,254,0.15)] text-xs font-mono-code">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+            </span>
+            <span className="text-slate-300 font-semibold tracking-wider uppercase">
+              SECURE &amp; TRUSTED BUY
+            </span>
+            <span className="text-cyan-400/60 font-bold">•</span>
+            <span className="text-cyan-300 font-bold tracking-wider drop-shadow-[0_0_8px_rgba(0,242,254,0.35)]">
+              10K+ PEOPLE
+            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            {/* Clearly Visible ADMIN PANEL Button in Footer */}
-            <button
-              type="button"
-              id="footer-admin-panel-btn"
-              onClick={navigateToAdmin}
-              className="px-3 py-1.5 rounded-xl bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,242,254,0.2)] font-bold text-xs"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-              <span>ADMIN PANEL</span>
-              <span className="text-[10px] text-cyan-400 font-mono-code bg-slate-900 px-1.5 py-0.2 rounded border border-cyan-500/30">
-                /admin
-              </span>
-            </button>
-
-            <span className="text-slate-700 hidden sm:inline">|</span>
-
-            <button
-              onClick={() => setIsTerminalOpen(true)}
-              className="hover:text-cyan-400 transition-colors cursor-pointer"
-            >
-              LIVE TELEMETRY
-            </button>
-            <span className="text-slate-700 hidden sm:inline">|</span>
-            <span>AEGIS CORE DEFENSE © 2026</span>
+          {/* Clean Portal Copyright / Identifier */}
+          <div className="flex items-center gap-2 text-[11px] font-mono-code text-slate-500">
+            <span className="tracking-widest">VERIFY // BUY © 2026</span>
           </div>
         </footer>
       </div>
@@ -273,6 +237,17 @@ export default function App() {
         logs={logs}
         onClearLogs={handleClearLogs}
       />
+
+      {/* Admin Login Modal (Triggered by clicking AEGIS logo in header) */}
+      {isAdminLoginModalOpen && (
+        <AdminLoginModal
+          onSuccess={() => {
+            setIsAdminLoginModalOpen(false);
+            navigateToAdmin();
+          }}
+          onCancel={() => setIsAdminLoginModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

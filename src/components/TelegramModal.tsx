@@ -12,7 +12,7 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
   const [copied, setCopied] = useState(false);
   const [hasSubscribed, setHasSubscribed] = useState(false);
 
-  const telegramUrl = 'https://t.me/AegisQuantumDefense';
+  const telegramUrl = 'https://t.me/VerifyBuyOfficial';
 
   const handleCopy = () => {
     cyberAudio.playClick(1300);
@@ -84,12 +84,12 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-display font-bold text-lg text-white tracking-wider">
-                  AEGIS DEFENSE CHANNEL
+                  VERIFY // BUY OFFICIAL CHANNEL
                 </h3>
                 <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
               </div>
               <p className="text-xs text-slate-400 font-mono-code mt-0.5">
-                @AegisQuantumDefense • Verified Security Feed
+                @VerifyBuyOfficial • Official Broadcast Feed
               </p>
             </div>
           </div>
@@ -97,10 +97,10 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
           {/* Channel Stats Row */}
           <div className="grid grid-cols-3 gap-2.5 mb-5 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
             <div className="text-center">
-              <div className="text-[10px] text-slate-500 font-mono-code">SUBSCRIBERS</div>
+              <div className="text-[10px] text-slate-500 font-mono-code">COMMUNITY</div>
               <div className="text-sm font-bold text-slate-100 font-mono-code flex items-center justify-center gap-1 mt-0.5">
                 <Users className="w-3.5 h-3.5 text-cyan-400" />
-                48,290
+                10,000+
               </div>
             </div>
             <div className="text-center border-x border-slate-800">
@@ -111,7 +111,7 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
               </div>
             </div>
             <div className="text-center">
-              <div className="text-[10px] text-slate-500 font-mono-code">FREQ</div>
+              <div className="text-[10px] text-slate-500 font-mono-code">UPDATES</div>
               <div className="text-sm font-bold text-cyan-300 font-mono-code flex items-center justify-center gap-1 mt-0.5">
                 <Bell className="w-3.5 h-3.5 text-cyan-400" />
                 REALTIME
@@ -122,27 +122,27 @@ export const TelegramModal: React.FC<TelegramModalProps> = ({ isOpen, onClose })
           {/* Recent Broadcasts Preview */}
           <div className="mb-5 space-y-2">
             <div className="text-[11px] font-mono-code text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>LATEST BROADCASTS</span>
-              <span className="text-cyan-400/80 text-[10px]">ENCRYPTED FEED</span>
+              <span>LATEST UPDATES</span>
+              <span className="text-cyan-400/80 text-[10px]">VERIFIED FEED</span>
             </div>
 
             <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs text-slate-300 space-y-1">
               <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono-code">
-                <span className="text-cyan-400 font-semibold">[SEC-ADVISORY #492]</span>
+                <span className="text-cyan-400 font-semibold">[ANNOUNCEMENT]</span>
                 <span>28 mins ago</span>
               </div>
               <p className="text-slate-200">
-                Quantum Key Rotation Protocol v4.8 deployed across all edge gateways (Tokyo & Frankfurt nodes). Latency dropped by 18%.
+                Key Verification Gateway v4.8 deployed. Instant module dispatch enabled.
               </p>
             </div>
 
             <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs text-slate-300 space-y-1">
               <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono-code">
-                <span className="text-amber-400 font-semibold">[MAINTENANCE]</span>
+                <span className="text-cyan-300 font-semibold">[RELEASE]</span>
                 <span>3 hours ago</span>
               </div>
               <p className="text-slate-300">
-                Scheduled TLS 1.3 handshake optimization concluded. Zero downtime recorded.
+                Runtime license keys and auto-activation system online.
               </p>
             </div>
           </div>

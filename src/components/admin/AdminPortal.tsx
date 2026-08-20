@@ -12,6 +12,7 @@ import {
 import { apiClient } from '../../services/apiClient';
 
 import { AdminOverviewTab } from './AdminOverviewTab';
+import { AdminCustomerManagementTab } from './AdminCustomerManagementTab';
 import { AdminUsersTab } from './AdminUsersTab';
 import { AdminUserPricingTab } from './AdminUserPricingTab';
 import { AdminRuntimePlansTab } from './AdminRuntimePlansTab';
@@ -28,7 +29,7 @@ interface AdminPortalProps {
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<string>('customers');
   const [targetPricingUserId, setTargetPricingUserId] = useState<string>('USER_10025');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!apiClient.getAdminToken());
@@ -103,6 +104,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
   };
 
   const navItems = [
+    { 
+      id: 'customers', 
+      label: 'CUSTOMER MANAGEMENT', 
+      icon: Users, 
+      highlight: true, 
+      badge: 'PRO' 
+    },
     { id: 'overview', label: 'OVERVIEW', icon: LayoutDashboard },
     { id: 'users', label: 'USER DIRECTORY', icon: Users, badge: `${users.length}` },
     { 
@@ -160,7 +168,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-display font-black text-sm tracking-widest text-white">
-                  AEGIS // DEFENSE
+                  VERIFY // BUY
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono-code font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40">
                   ROOT ADMIN [LEVEL 5]
@@ -295,6 +303,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
 
         {/* Content Canvas */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          {activeTab === 'customers' && (
+            <AdminCustomerManagementTab
+              onRefreshParent={fetchAllAdminData}
+            />
+          )}
+
           {activeTab === 'overview' && (
             <AdminOverviewTab
               stats={stats}

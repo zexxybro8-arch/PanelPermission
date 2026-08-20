@@ -12,13 +12,13 @@ import { extractErrorMessage } from '../utils/errorMessage';
 
 interface CyberLoginCardProps {
   onLoginSuccess: (user: UserProfile) => void;
-  onOpenTerminal: () => void;
-  selectedRegion: string;
+  onOpenTerminal?: () => void;
+  selectedRegion?: string;
 }
 
 export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   onLoginSuccess,
-  selectedRegion,
+  selectedRegion = 'Asia-SE',
 }) => {
   // Empty initial React states on page load (strict authentication lock)
   const [operatorId, setOperatorId] = useState('');
@@ -34,25 +34,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   >('idle');
   const [authStatusMessage, setAuthStatusMessage] = useState('');
 
-  // Password Entropy Calculator
-  const calculateEntropy = (pwd: string) => {
-    if (!pwd) return { score: 0, label: 'AWAITING KEY', color: 'bg-slate-700', bits: 0 };
-    let poolSize = 0;
-    if (/[a-z]/.test(pwd)) poolSize += 26;
-    if (/[A-Z]/.test(pwd)) poolSize += 26;
-    if (/[0-9]/.test(pwd)) poolSize += 10;
-    if (/[^a-zA-Z0-9]/.test(pwd)) poolSize += 33;
-
-    const bits = Math.round(pwd.length * Math.log2(poolSize || 1));
-    if (bits < 30) return { score: 1, label: 'STANDARD', color: 'bg-rose-500', bits };
-    if (bits < 45) return { score: 2, label: 'MODERATE', color: 'bg-amber-500', bits };
-    if (bits < 60) return { score: 3, label: 'SECURE', color: 'bg-sky-400', bits };
-    return { score: 4, label: 'QUANTUM-GRADE', color: 'bg-cyan-400', bits };
-  };
-
-  const entropy = calculateEntropy(passphrase);
-
-  // Execute Strict Authentication Flow via Server Backend
+  // Execute Strict Authentication Flow via Server Backend / Resilient Client Engine
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -81,18 +63,18 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
     setAuthStatusMessage('VERIFYING AUTHORISED CIPHER HASH...');
 
     try {
-      // Backend cryptographic verification call
+      // Cryptographic verification call
       const authResult = await apiClient.login(trimmedId, trimmedPass);
 
       cyberAudio.playClick(1400);
       setAuthStep('lattice');
-      setAuthStatusMessage('VALIDATING KYBER-1024 LATTICE SIGNATURE...');
+      setAuthStatusMessage('VALIDATING ENCRYPTED ACCESS TOKEN...');
 
       setTimeout(() => {
         cyberAudio.playClick(1600);
         setAuthStep('decrypting');
-        setAuthStatusMessage('VERIFYING AUTHORIZED SESSION TOKEN...');
-      }, 450);
+        setAuthStatusMessage('AUTHORIZING SECURE SESSION...');
+      }, 400);
 
       setTimeout(() => {
         cyberAudio.playAccessGranted();
@@ -119,6 +101,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
         setTimeout(() => {
           const userObj: UserProfile = {
             id: authResult.user.id,
+            customer_id: (authResult.user as any).customer_id,
             username: authResult.user.username,
             codename: `${authResult.user.username}_OPERATOR`,
             clearanceLevel: authResult.user.clearanceLevel || 3,
@@ -130,10 +113,14 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
             sessionToken: authResult.token,
             loginTime: new Date().toISOString(),
             email: authResult.user.email,
+            price: (authResult.user as any).price,
+            status: (authResult.user as any).status,
+            expiry_date: (authResult.user as any).expiry_date,
+            assigned_modules: (authResult.user as any).assigned_modules,
           };
           onLoginSuccess(userObj);
-        }, 750);
-      }, 950);
+        }, 700);
+      }, 850);
 
     } catch (err: unknown) {
       cyberAudio.playError();
@@ -145,12 +132,12 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto px-4 sm:px-0 z-20 relative">
+    <div className="w-full max-w-lg mx-auto px-4 sm:px-0 z-20 relative">
       {/* Outer Card with 3D Border Glow & Glassmorphism */}
       <div 
         className="w-full rounded-3xl cyber-glass p-6 sm:p-8 border border-cyan-500/25 shadow-[0_0_60px_-15px_rgba(0,242,254,0.3)] relative overflow-hidden"
         style={{
-          background: 'linear-gradient(155deg, rgba(12, 17, 28, 0.88) 0%, rgba(7, 10, 17, 0.94) 100%)',
+          background: 'linear-gradient(155deg, rgba(12, 17, 28, 0.90) 0%, rgba(7, 10, 17, 0.96) 100%)',
         }}
       >
         {/* Top Glowing Metallic Accent Strip */}
@@ -161,8 +148,8 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
 
         {/* Card Header & Portal Details */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-1.5">
+        <div className="mb-6 text-left">
+          <div className="flex items-center gap-2 mb-2">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 tracking-wider flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
               SECURE AUTHENTICATION GATEWAY
@@ -171,7 +158,7 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
           <h1 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wider">
             PANEL ACCESS
           </h1>
-          <p className="text-xs text-slate-400 font-mono-code mt-1 tracking-wider uppercase">
+          <p className="text-xs text-slate-400 font-mono-code mt-1.5 tracking-wider uppercase leading-relaxed">
             ENTER AUTHORIZED ID AND VALID PASS KEY TO ACCESS YOUR PANEL
           </p>
         </div>
@@ -181,8 +168,8 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
           {/* Operator Identifier Input */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] font-mono-code text-slate-400 tracking-wider flex items-center gap-1.5">
-                <Key className="w-3 h-3 text-cyan-400" />
+              <label className="text-[11px] font-mono-code text-slate-300 tracking-wider flex items-center gap-1.5 font-medium">
+                <Key className="w-3.5 h-3.5 text-cyan-400" />
                 ENTER AUTHORISED ID
               </label>
               <span className="text-[10px] font-mono-code text-cyan-400/80">SHA-256 HASHED</span>
@@ -213,8 +200,8 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
           {/* Master Passphrase Input */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] font-mono-code text-slate-400 tracking-wider flex items-center gap-1.5">
-                <Lock className="w-3 h-3 text-cyan-400" />
+              <label className="text-[11px] font-mono-code text-slate-300 tracking-wider flex items-center gap-1.5 font-medium">
+                <Lock className="w-3.5 h-3.5 text-cyan-400" />
                 ENTER VALID PASS KEY
               </label>
               <span className="text-[10px] font-mono-code text-slate-500">ENCRYPTED INPUT</span>
@@ -251,27 +238,9 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-
-            {/* Real-time Entropy Meter Bar */}
-            <div className="mt-2 space-y-1">
-              <div className="flex items-center justify-between text-[10px] font-mono-code">
-                <span className="text-slate-400">CIPHER ENTROPY:</span>
-                <span className={`font-bold ${
-                  entropy.score >= 3 ? 'text-cyan-300' : entropy.score === 2 ? 'text-amber-300' : entropy.score === 1 ? 'text-rose-400' : 'text-slate-500'
-                }`}>
-                  {entropy.label} {entropy.bits > 0 ? `(${entropy.bits} BITS)` : ''}
-                </span>
-              </div>
-              <div className="grid grid-cols-4 gap-1 h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                <div className={`rounded-full ${entropy.score >= 1 ? entropy.color : 'bg-slate-800'} transition-all`} />
-                <div className={`rounded-full ${entropy.score >= 2 ? entropy.color : 'bg-slate-800'} transition-all`} />
-                <div className={`rounded-full ${entropy.score >= 3 ? entropy.color : 'bg-slate-800'} transition-all`} />
-                <div className={`rounded-full ${entropy.score >= 4 ? entropy.color : 'bg-slate-800'} transition-all`} />
-              </div>
-            </div>
           </div>
 
-          {/* Interactive Cyber Proof of Work (PoW) Human Verification */}
+          {/* Interactive Proof of Work (PoW) Human Verification */}
           <CyberPoWVerification
             isVerified={isPoWVerified}
             onVerify={setIsPoWVerified}
@@ -318,26 +287,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
             </button>
           </div>
         </form>
-
-        {/* Security Compliance Badges Footer */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[10px] font-mono-code text-slate-400">
-          <div className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800/60">
-            <span className="text-cyan-400 font-bold">TLS 1.3</span>
-            <span className="block text-slate-500">ENCRYPTED</span>
-          </div>
-          <div className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800/60">
-            <span className="text-cyan-400 font-bold">ZKP</span>
-            <span className="block text-slate-500">ZERO-KNOWLEDGE</span>
-          </div>
-          <div className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800/60">
-            <span className="text-cyan-400 font-bold">KYBER-1024</span>
-            <span className="block text-slate-500">QUANTUM RESIST</span>
-          </div>
-          <div className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800/60">
-            <span className="text-emerald-400 font-bold">SOC2 TYPE II</span>
-            <span className="block text-slate-500">COMPLIANT</span>
-          </div>
-        </div>
       </div>
     </div>
   );

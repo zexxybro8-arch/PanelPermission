@@ -14,6 +14,7 @@ export interface CyberModule {
 
 export interface UserProfile {
   id?: string;
+  customer_id?: string;
   username: string;
   codename: string;
   clearanceLevel: number;
@@ -25,6 +26,10 @@ export interface UserProfile {
   sessionToken: string;
   loginTime: string;
   email?: string;
+  price?: number;
+  status?: 'active' | 'blocked';
+  expiry_date?: string;
+  assigned_modules?: string[];
 }
 
 export interface TelemetryLog {
@@ -53,6 +58,56 @@ export interface ThreatItem {
   mitigation: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   timeAgo: string;
+}
+
+// ==========================================
+// CUSTOMER MANAGEMENT ENTITIES
+// ==========================================
+
+export interface Customer {
+  id: string;
+  customer_id: string;
+  username: string;
+  password_hash?: string;
+  display_name?: string;
+  price: number;
+  status: 'active' | 'blocked';
+  expiry_date: string;
+  assigned_modules: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerStats {
+  totalUsers: number;
+  activeUsers: number;
+  blockedUsers: number;
+  expiredUsers: number;
+}
+
+export interface CustomerCreationInput {
+  customer_id?: string;
+  username: string;
+  password: string;
+  display_name?: string;
+  price: number;
+  status: 'active' | 'blocked';
+  expiry_date: string;
+  assigned_modules: string[];
+}
+
+export interface CreatedCustomerResult {
+  customer: Customer;
+  credentials: {
+    customer_id: string;
+    username: string;
+    password: string;
+    display_name?: string;
+    price: number;
+    status: 'active' | 'blocked';
+    expiry_date: string;
+    assigned_modules: string[];
+  };
 }
 
 // ==========================================

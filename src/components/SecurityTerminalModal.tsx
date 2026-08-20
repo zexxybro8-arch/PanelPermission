@@ -39,26 +39,20 @@ export const SecurityTerminalModal: React.FC<SecurityTerminalModalProps> = ({
     let response = '';
     switch (cmd) {
       case 'help':
-        response = `[${ts}] AVAILABLE PROTOCOLS:\n  status    - View global defense gateway metrics\n  ping      - Test node latency across Singapore, Tokyo, Frankfurt\n  threats   - Inspect active intercepted attack vectors\n  clear     - Wipe command terminal history\n  decrypt   - Test simulated Kyber-1024 quantum decryption`;
+        response = `[${ts}] AVAILABLE COMMANDS:\n  status    - View system health & gateway metrics\n  ping      - Test network latency\n  clear     - Clear command terminal history`;
         break;
       case 'status':
-        response = `[${ts}] STATUS: ALL NODES OPTIMAL\n  TLS 1.3: Active (Zero Downgrades)\n  Intrusion Rate: 0.00% Breach / 1,492 Intercepts past 1h\n  Encryption: KYBER-1024 + AES-256-GCM`;
+        response = `[${ts}] STATUS: SYSTEM OPERATIONAL\n  Gateway: Active\n  Security: Verified\n  Response Time: 24ms`;
         break;
       case 'ping':
-        response = `[${ts}] EDGE LATENCY:\n  SG-01 (Singapore): 12ms [OPTIMAL]\n  TYO-02 (Tokyo): 19ms [OPTIMAL]\n  FRA-04 (Frankfurt): 28ms [OPTIMAL]\n  IAD-01 (US-East): 41ms [OPTIMAL]`;
-        break;
-      case 'threats':
-        response = `[${ts}] RECENT THREAT BLOCKS:\n  185.220.101.5 [TOR Exit] -> Port 443 Probe (BLOCKED)\n  45.154.255.88 [Automated Botnet] -> SYN Flood (MITIGATED)\n  194.26.29.112 [Brute Force] -> Invalid Signature (ISOLATED)`;
-        break;
-      case 'decrypt':
-        response = `[${ts}] RUNNING QUANTUM DECRYPT BENCHMARK...\n  Generated 256-bit Seed: 0x9f8b72...4e1a\n  Kyber-1024 Lattice Verification: SUCCESS (0.42ms)\n  Status: VERIFIED VALID`;
+        response = `[${ts}] NETWORK LATENCY:\n  Node-01: 12ms [OPTIMAL]\n  Node-02: 19ms [OPTIMAL]\n  Node-03: 28ms [OPTIMAL]`;
         break;
       case 'clear':
         setCustomOutputs([]);
         setCommandInput('');
         return;
       default:
-        response = `[${ts}] UNRECOGNIZED PROTOCOL: '${commandInput}'. Type 'help' for command list.`;
+        response = `[${ts}] UNRECOGNIZED COMMAND: '${commandInput}'. Type 'help' for command list.`;
     }
 
     setCustomOutputs((prev) => [...prev, `> ${commandInput}`, response]);
@@ -72,7 +66,7 @@ export const SecurityTerminalModal: React.FC<SecurityTerminalModalProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `aegis-security-audit-${Date.now()}.log`;
+    a.download = `verify-buy-audit-${Date.now()}.log`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -110,13 +104,13 @@ export const SecurityTerminalModal: React.FC<SecurityTerminalModalProps> = ({
               </div>
               <div>
                 <h3 className="font-display font-bold text-sm sm:text-base text-white tracking-wider flex items-center gap-2">
-                  AEGIS LIVE SECURITY TELEMETRY
+                  VERIFY // BUY ACTIVITY CONSOLE
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-emerald-950 text-emerald-400 border border-emerald-500/30">
                     REALTIME
                   </span>
                 </h3>
                 <p className="text-[10px] font-mono-code text-slate-400">
-                  Zero-Knowledge Packet Inspection & Threat Stream
+                  Real-time System Activity Stream
                 </p>
               </div>
             </div>

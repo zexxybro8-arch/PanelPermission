@@ -3,12 +3,14 @@ import { motion } from 'motion/react';
 import { 
   ArrowLeft, Terminal, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
-  Flame, ChevronRight, ShieldCheck, LayoutDashboard
+  Flame, ChevronRight, ShieldCheck, LayoutDashboard, Radio, Shield,
+  User, Copy, CheckCircle2
 } from 'lucide-react';
 import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
 import { PremiumPaymentModal } from './PremiumPaymentModal';
 import { apiClient } from '../services/apiClient';
+import { appStore } from '../store/appStore';
 
 interface CyberDashboardProps {
   user: UserProfile;
@@ -18,6 +20,10 @@ interface CyberDashboardProps {
 }
 
 const MODULE_ICONS: Record<string, React.ElementType> = {
+  'MOD-AEGIS-SENTINEL': Shield,
+  'MOD-SPECTRE-FIREWALL': Flame,
+  'MOD-NEURAL-VAULT': Lock,
+  'MOD-CYBER-SCOUT': Radio,
   'angry-mod': Zap,
   'bala-mod-xyz': Flame,
   'gk-panel': Cpu,
@@ -39,9 +45,9 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [upiQrImage, setUpiQrImage] = useState<string>('');
   const [activePaywallModule, setActivePaywallModule] = useState<CyberModule | null>(null);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Load live portal catalogue and personalized pricing from backend
+  // Load live portal catalogue and personalized pricing from local store
   const loadPortalConfig = async () => {
     try {
       const config = await apiClient.getPortalConfig(user.id || user.username);
@@ -50,15 +56,27 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       setUserLicenses(config.userLicenses || []);
       if (config.upiQrImage) setUpiQrImage(config.upiQrImage);
     } catch (err) {
-      console.warn('Failed to load live portal config, using default modules:', err);
-    } finally {
-      setLoading(false);
+      console.warn('Failed to load portal config:', err);
     }
   };
 
   useEffect(() => {
     loadPortalConfig();
+    const unsubscribe = appStore.subscribe(() => {
+      loadPortalConfig();
+    });
+    return () => unsubscribe();
   }, [user]);
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(label);
+      setTimeout(() => setCopiedField(null), 2500);
+    } catch {
+      // ignore
+    }
+  };
 
   // Trigger Paywall whenever an ON/OFF toggle or REQUEST ACCESS is clicked
   const handleToggleModule = (module: CyberModule) => {
@@ -74,6 +92,11 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   };
 
   const isAdmin = user.role === 'admin' || user.clearanceLevel >= 5 || user.username === 'ADMINXD';
+
+  // Calculate days remaining for customer
+  const now = new Date();
+  const expiryDate = user.expiry_date ? new Date(user.expiry_date) : null;
+  const daysRemaining = expiryDate ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
   return (
     <motion.div
@@ -149,7 +172,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
             className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-xs font-mono-code text-cyan-300 hover:text-white flex items-center gap-2 transition-all cursor-pointer"
           >
             <Terminal className="w-4 h-4 text-cyan-400" />
-            <span className="hidden sm:inline">LIVE TELEMETRY</span>
+            <span className="hidden sm:inline">SYSTEM CONSOLE</span>
             <span className="sm:hidden">CONSOLE</span>
           </button>
 
@@ -166,11 +189,117 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         </div>
       </div>
 
+      {/* ======================================================== */}
+      {/* MY ACCOUNT / CUSTOMER CREDENTIALS & DETAILS CARD */}
+      {/* ======================================================== */}
+      <div 
+        className="w-full rounded-3xl cyber-glass p-5 sm:p-6 border border-slate-800 bg-slate-950/80 shadow-[0_0_40px_-15px_rgba(0,242,254,0.15)] relative overflow-hidden"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+              <User className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm sm:text-base font-display font-bold text-white tracking-wide">
+                MY ACCOUNT // {user.customer_id || user.username}
+              </h2>
+              <span className="text-[10px] font-mono-code text-slate-400">
+                PERSONAL AUTHORIZED SUBSCRIPTION DETAILS
+              </span>
+            </div>
+          </div>
+
+          {copiedField && (
+            <span className="text-[11px] font-mono-code text-emerald-400 flex items-center gap-1 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-500/40">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Copied {copiedField}!
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 font-mono-code text-xs">
+          {/* Customer ID */}
+          <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold block">CUSTOMER ID</span>
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-bold text-cyan-300 truncate">
+                {user.customer_id || user.id || 'N/A'}
+              </span>
+              {user.customer_id && (
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(user.customer_id!, 'Customer ID')}
+                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300"
+                  title="Copy Customer ID"
+                >
+                  <Copy className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Username */}
+          <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold block">USERNAME</span>
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-bold text-white truncate">
+                {user.username}
+              </span>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(user.username, 'Username')}
+                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300"
+                title="Copy Username"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Account Status */}
+          <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold block">STATUS</span>
+            <div>
+              {user.status === 'blocked' ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950 text-rose-400 border border-rose-500/40">
+                  BLOCKED
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  ACTIVE
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Pricing & Expiry */}
+          <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-1">
+            <span className="text-[10px] text-slate-500 font-bold block">PRICE & EXPIRY</span>
+            <div className="text-cyan-300 font-bold">
+              ₹{user.price || 120}
+              {expiryDate && (
+                <span className="text-[10px] text-slate-400 font-normal ml-1.5">
+                  ({daysRemaining !== null && daysRemaining >= 0 ? `${daysRemaining}d left` : 'Expired'})
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Grid of Cyber Modules */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
         {modules.map((mod, index) => {
-          const IconComponent = MODULE_ICONS[mod.id] || Zap;
-          const hasLicense = userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
+          const IconComponent = MODULE_ICONS[mod.id] || MODULE_ICONS[mod.icon] || Shield;
+          
+          // Customer module assignment check
+          const isCustomerModule = Array.isArray(user.assigned_modules) && user.assigned_modules.length > 0
+            ? user.assigned_modules.includes(mod.id)
+            : false;
+
+          const hasLicense = isCustomerModule || userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
 
           return (
             <motion.div
