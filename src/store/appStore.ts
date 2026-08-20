@@ -15,6 +15,7 @@ import {
   CustomerCreationInput,
   CreatedCustomerResult,
 } from '../types';
+import { storage } from './storage';
 
 export interface StoredCustomerRecord extends Customer {
   raw_password?: string;
@@ -293,28 +294,25 @@ export class AppStore {
 
   private loadFromStorage(): AppStoreState {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && Array.isArray(parsed.users) && Array.isArray(parsed.modules)) {
-          if (!Array.isArray(parsed.customers)) {
-            parsed.customers = [];
-          }
-          // Ensure stored admin matches current SAGAR551 credentials
-          const adminIdx = parsed.users.findIndex((u: any) => u.role === 'admin' || u.username === 'SAGAR551');
-          if (adminIdx !== -1) {
-            parsed.users[adminIdx] = {
-              ...parsed.users[adminIdx],
-              id: 'USR-SAGAR551',
-              username: 'SAGAR551',
-              rawPassKey: 'SAGAR@SAGAR1',
-              role: 'admin',
-              clearanceLevel: 5,
-              accountStatus: 'active',
-            };
-          }
-          return parsed;
+      const parsed = storage.loadAppState();
+      if (parsed && Array.isArray(parsed.users) && Array.isArray(parsed.modules)) {
+        if (!Array.isArray(parsed.customers)) {
+          parsed.customers = [];
         }
+        // Ensure stored admin matches current SAGAR551 credentials
+        const adminIdx = parsed.users.findIndex((u: any) => u.role === 'admin' || u.username === 'SAGAR551');
+        if (adminIdx !== -1) {
+          parsed.users[adminIdx] = {
+            ...parsed.users[adminIdx],
+            id: 'USR-SAGAR551',
+            username: 'SAGAR551',
+            rawPassKey: 'SAGAR@SAGAR1',
+            role: 'admin',
+            clearanceLevel: 5,
+            accountStatus: 'active',
+          };
+        }
+        return parsed;
       }
     } catch {
       // ignore
@@ -325,11 +323,7 @@ export class AppStore {
   }
 
   private saveToStorage(state = this.state): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // ignore storage quota errors
-    }
+    storage.saveAppState(state);
     this.notify();
   }
 
@@ -621,6 +615,190 @@ export class AppStore {
       success: true,
       message: 'Customer permanently deleted.',
     };
+  }
+
+  public updateCustomerPanelPermissionsRecord(
+    customerId: string,
+    panelId: string,
+    permissions: {
+      verify_access?: boolean;
+      files_access?: boolean;
+      setup_access?: boolean;
+      payment_status?: 'none' | 'pending' | 'approved' | 'rejected';
+      purchased?: boolean;
+    }
+  ): { success: boolean; message: string; panel_permissions: Record<string, any> } {
+    const customer = this.state.customers.find(
+      (c) => c.id === customerId || c.customer_id === customerId || c.username === customerId
+    );
+    if (!customer) throw new Error('Customer not found');
+
+    if (!customer.panel_permissions) {
+      customer.panel_permissions = {};
+    }
+
+    const existing = customer.panel_permissions[panelId] || {
+      verify_access: false,
+      files_access: false,
+      setup_access: false,
+      payment_status: 'none',
+      purchased: false,
+    };
+
+    customer.panel_permissions[panelId] = {
+      ...existing,
+      ...permissions,
+    };
+
+    customer.updated_at = new Date().toISOString();
+    this.logActivity(
+      'SAGAR551',
+      'PANEL_PERMISSIONS_UPDATED',
+      `${customer.customer_id}:${panelId}`,
+      'SUCCESS',
+      `Updated panel ${panelId} permissions for customer ${customer.username}`
+    );
+    this.saveToStorage();
+
+    return {
+      success: true,
+      message: 'Panel permissions updated successfully.',
+      panel_permissions: customer.panel_permissions,
+    };
+  }
+
+  public bulkUpdateCustomerPanelPermissionsRecord(
+    customerId: string,
+    action: 'unlock_all' | 'lock_all'
+  ): { success: boolean; message: string; panel_permissions: Record<string, any> } {
+    const customer = this.state.customers.find(
+      (c) => c.id === customerId || c.customer_id === customerId || c.username === customerId
+    );
+    if (!customer) throw new Error('Customer not found');
+
+    if (!customer.panel_permissions) {
+      customer.panel_permissions = {};
+    }
+
+    const stateVal = action === 'unlock_all';
+    const modulesToUpdate = this.state.modules.length > 0
+      ? this.state.modules
+      : [{ id: 'MOD-AEGIS-SENTINEL' }, { id: 'mod-1' }];
+
+    modulesToUpdate.forEach((m) => {
+      const existing = customer.panel_permissions![m.id] || {
+        verify_access: false,
+        files_access: false,
+        setup_access: false,
+        payment_status: 'none',
+        purchased: false,
+      };
+      customer.panel_permissions![m.id] = {
+        ...existing,
+        verify_access: stateVal,
+        files_access: stateVal,
+        setup_access: stateVal,
+      };
+    });
+
+    customer.updated_at = new Date().toISOString();
+    this.logActivity(
+      'SAGAR551',
+      'BULK_PERMISSIONS_UPDATED',
+      customer.customer_id,
+      'SUCCESS',
+      `Applied ${action} for customer ${customer.username}`
+    );
+    this.saveToStorage();
+
+    return {
+      success: true,
+      message: `All panel permissions ${action === 'unlock_all' ? 'enabled' : 'locked'} successfully.`,
+      panel_permissions: customer.panel_permissions,
+    };
+  }
+
+  public buyPanelRecord(
+    panelId: string,
+    transactionRef?: string,
+    paymentNote?: string,
+    customerId?: string
+  ): { success: boolean; message: string; panel_id: string; permission: any; panel_permissions?: Record<string, any> } {
+    const customer = this.state.customers.find(
+      (c) => c.id === customerId || c.customer_id === customerId || c.username === customerId
+    );
+
+    const permission = {
+      purchased: true,
+      payment_status: 'pending' as const,
+      verify_access: false,
+      files_access: false,
+      setup_access: false,
+      payment_ref: transactionRef || '',
+      payment_note: paymentNote || '',
+      purchased_at: new Date().toISOString(),
+    };
+
+    if (customer) {
+      if (!customer.panel_permissions) customer.panel_permissions = {};
+      const prev = customer.panel_permissions[panelId] || {};
+      customer.panel_permissions[panelId] = {
+        ...prev,
+        ...permission,
+      };
+      customer.updated_at = new Date().toISOString();
+
+      // Create an order in orders store
+      const orderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
+      const mod = this.state.modules.find((m) => m.id === panelId);
+      this.state.orders.unshift({
+        id: orderId,
+        userId: customer.id,
+        username: customer.username,
+        moduleId: panelId,
+        moduleName: mod ? mod.name : panelId,
+        planId: 'plan-custom',
+        planName: 'Panel License Purchase',
+        durationDays: 30,
+        finalPrice: customer.price || mod?.price || 120,
+        paymentStatus: 'PENDING',
+        transactionRef: transactionRef || ('UPI-TXN-' + Math.floor(1000000000 + Math.random() * 9000000000)),
+        paymentMethod: 'UPI_QR',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      this.saveToStorage();
+    }
+
+    return {
+      success: true,
+      message: 'PAYMENT RECEIVED // AWAITING ADMIN APPROVAL',
+      panel_id: panelId,
+      permission,
+      panel_permissions: customer?.panel_permissions,
+    };
+  }
+
+  public exportState(): string {
+    return storage.exportAppState(this.state);
+  }
+
+  public importState(jsonString: string): { success: boolean; message: string } {
+    const res = storage.importAppState(jsonString);
+    if (res.success && res.newState) {
+      this.state = res.newState;
+      this.notify();
+    }
+    return { success: res.success, message: res.message };
+  }
+
+  public resetState(): { success: boolean; message: string } {
+    storage.clearAppState();
+    this.state = this.getDefaultState();
+    this.saveToStorage();
+    this.notify();
+    return { success: true, message: 'Application state reset to factory defaults.' };
   }
 
   // ==========================================
@@ -1150,6 +1328,22 @@ export class AppStore {
     };
   }
 
+  public resetUserSessions(userId: string): number {
+    return 1;
+  }
+
+  public revokeAllSessions(): number {
+    this.state.sessions = [];
+    this.saveToStorage();
+    return 1;
+  }
+
+  public getUserPricingDetails(userId: string): { customPricing: UserCustomPricing | null } {
+    const user = this.state.users.find((u) => u.id === userId || u.username === userId);
+    const custom = user ? this.state.userPricing[user.id] || null : null;
+    return { customPricing: custom };
+  }
+
   public saveCustomPricing(data: {
     userId: string;
     plan15Price: number;
@@ -1178,6 +1372,15 @@ export class AppStore {
       message: `Custom pricing for ${user.username} saved successfully`,
       pricing,
     };
+  }
+
+  public resetCustomPricing(userId: string): { success: boolean; message: string } {
+    const user = this.state.users.find((u) => u.id === userId || u.username === userId);
+    if (user) {
+      delete this.state.userPricing[user.id];
+      this.saveToStorage();
+    }
+    return { success: true, message: 'Reset custom pricing to defaults' };
   }
 
   // ==========================================

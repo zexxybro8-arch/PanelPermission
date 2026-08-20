@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Settings, Shield, QrCode, Server, Clock, 
-  Save, Check, RefreshCw, AlertCircle
+  Save, Check, RefreshCw, AlertCircle, Download, Upload, Trash2, Database
 } from 'lucide-react';
 import { SystemSettingsData } from '../../types';
 import { apiClient } from '../../services/apiClient';
@@ -28,6 +28,9 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
   );
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +45,63 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
       alert(extractErrorMessage(err, 'Failed to update system settings'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExportData = () => {
+    try {
+      const jsonStr = apiClient.exportAppState();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `aegis-defense-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setBackupMsg({ type: 'success', text: 'EXPORT DATA SUCCESSFUL: JSON backup downloaded.' });
+    } catch (err: any) {
+      setBackupMsg({ type: 'error', text: `EXPORT FAILED: ${err?.message || 'Unknown error'}` });
+    }
+  };
+
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const content = evt.target?.result as string;
+        const res = apiClient.importAppState(content);
+        if (res.success) {
+          setBackupMsg({ type: 'success', text: 'IMPORT DATA SUCCESSFUL: All system data restored.' });
+          onRefresh();
+        } else {
+          setBackupMsg({ type: 'error', text: `IMPORT FAILED: ${res.message}` });
+        }
+      } catch (err: any) {
+        setBackupMsg({ type: 'error', text: `IMPORT ERROR: ${err?.message || 'Invalid file format'}` });
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleResetData = () => {
+    const confirmText = prompt('WARNING: THIS WILL WIPE ALL CUSTOMERS, ORDERS, AND CUSTOM SETTINGS AND RESET TO FACTORY DEFAULTS.\n\nType "RESET" to confirm:');
+    if (confirmText === 'RESET') {
+      const res = apiClient.resetAppState();
+      if (res.success) {
+        setBackupMsg({ type: 'success', text: 'RESET DATA SUCCESSFUL: Application restored to default state.' });
+        onRefresh();
+      } else {
+        setBackupMsg({ type: 'error', text: `RESET FAILED: ${res.message}` });
+      }
+    } else if (confirmText !== null) {
+      alert('Reset cancelled. You must type "RESET" to confirm.');
     }
   };
 
@@ -172,6 +232,76 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
           </div>
         </div>
       </form>
+
+      {/* ADMIN DATA BACKUP / IMPORT / EXPORT / RESET SECTION */}
+      <div className="p-6 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
+            <Database className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="font-display font-bold text-xs text-white tracking-wider">
+              ADMIN DATA BACKUP &amp; FRONTEND STORAGE MANAGEMENT
+            </h3>
+            <span className="text-[11px] font-mono-code text-slate-400">
+              Backup, restore, or reset all customer profiles, permissions, orders, and configuration JSON locally
+            </span>
+          </div>
+        </div>
+
+        {backupMsg && (
+          <div
+            className={`p-3 rounded-xl border text-xs font-mono-code flex items-center gap-2 ${
+              backupMsg.type === 'success'
+                ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                : 'bg-rose-950/60 border-rose-500/50 text-rose-300'
+            }`}
+          >
+            {backupMsg.type === 'success' ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+            <span>{backupMsg.text}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          {/* EXPORT DATA */}
+          <button
+            type="button"
+            onClick={handleExportData}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono-code font-bold text-cyan-300 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-cyan-400" />
+            <span>EXPORT DATA (JSON)</span>
+          </button>
+
+          {/* IMPORT DATA */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportData}
+            accept=".json,application/json"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono-code font-bold text-amber-300 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Upload className="w-4 h-4 text-amber-400" />
+            <span>IMPORT DATA (JSON)</span>
+          </button>
+
+          {/* RESET DATA */}
+          <button
+            type="button"
+            onClick={handleResetData}
+            className="px-4 py-2.5 rounded-xl bg-rose-950/50 hover:bg-rose-900/60 border border-rose-800/80 text-xs font-mono-code font-bold text-rose-300 flex items-center gap-2 transition-all cursor-pointer ml-auto"
+          >
+            <Trash2 className="w-4 h-4 text-rose-400" />
+            <span>RESET DATA</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
+

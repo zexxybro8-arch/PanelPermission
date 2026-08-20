@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Boxes, Plus, Edit3, Trash2, Power, Zap, Flame, Cpu, 
   Activity, Droplets, Crosshair, EyeOff, X, Check, AlertTriangle, 
   Search, Shield, DollarSign, Image as ImageIcon, Users, UserCheck,
-  ExternalLink, Sparkles
+  ExternalLink, Sparkles, Upload
 } from 'lucide-react';
 import { CyberModule, Customer } from '../../types';
 import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
+import { compressImage } from '../../utils/imageCompressor';
 
 interface AdminModulesTabProps {
   modules: CyberModule[];
@@ -459,20 +460,40 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
                 </div>
               </div>
 
-              {/* Image URL with live preview */}
+              {/* Image URL / Upload with live preview */}
               <div>
                 <label className="text-[11px] font-mono-code text-slate-400 block mb-1 flex items-center justify-between">
-                  <span>PANEL IMAGE URL (BANNER / LOGO)</span>
+                  <span>PANEL IMAGE / LOGO (URL OR UPLOAD)</span>
                   <span className="text-[10px] text-slate-500">Optional</span>
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
-                    type="url"
-                    placeholder="https://... (direct image link)"
+                    type="text"
+                    placeholder="https://... or upload file"
                     value={newImageUrl}
                     onChange={(e) => setNewImageUrl(e.target.value)}
                     className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono-code text-white focus:border-cyan-400 outline-none"
                   />
+                  <label className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono-code text-cyan-300 flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
+                    <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>UPLOAD</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          try {
+                            const dataUrl = await compressImage(file);
+                            setNewImageUrl(dataUrl);
+                          } catch (err) {
+                            alert('Failed to compress image file');
+                          }
+                        }
+                      }}
+                    />
+                  </label>
                   {newImageUrl && (
                     <div className="w-10 h-10 rounded-xl bg-slate-900 border border-cyan-500/40 overflow-hidden shrink-0 flex items-center justify-center">
                       <img src={newImageUrl} alt="Preview" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
@@ -653,19 +674,39 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
                 />
               </div>
 
-              {/* Image URL */}
+              {/* Image URL / Upload */}
               <div>
                 <label className="text-[11px] font-mono-code text-slate-400 block mb-1">
-                  PANEL IMAGE URL (BANNER / LOGO)
+                  PANEL IMAGE / LOGO (URL OR UPLOAD)
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
-                    type="url"
-                    placeholder="https://... (direct image link)"
+                    type="text"
+                    placeholder="https://... or upload file"
                     value={editingModule.imageUrl || ''}
                     onChange={(e) => setEditingModule({ ...editingModule, imageUrl: e.target.value })}
                     className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono-code text-white focus:border-cyan-400 outline-none"
                   />
+                  <label className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-mono-code text-cyan-300 flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
+                    <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>UPLOAD</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          try {
+                            const dataUrl = await compressImage(file);
+                            setEditingModule({ ...editingModule, imageUrl: dataUrl });
+                          } catch (err) {
+                            alert('Failed to compress image file');
+                          }
+                        }
+                      }}
+                    />
+                  </label>
                   {editingModule.imageUrl && (
                     <div className="w-10 h-10 rounded-xl bg-slate-900 border border-cyan-500/40 overflow-hidden shrink-0 flex items-center justify-center">
                       <img src={editingModule.imageUrl} alt="Preview" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
