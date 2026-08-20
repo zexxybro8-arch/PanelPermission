@@ -726,7 +726,7 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
       </div>
 
       {/* 4 Dashboard Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-1 min-[340px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
         {/* Total Users */}
         <div className="bg-gradient-to-br from-slate-900/90 to-slate-950/90 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group hover:border-cyan-500/40 transition-colors">
           <div className="flex items-center justify-between">
@@ -885,7 +885,7 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
           </div>
 
           {/* Customer Metadata Overview Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-950/90 p-3.5 rounded-xl border border-slate-800 text-xs font-mono-code">
+          <div className="grid grid-cols-1 min-[340px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-950/90 p-3.5 rounded-xl border border-slate-800 text-xs font-mono-code">
             <div>
               <span className="text-slate-500 text-[10px] block">CUSTOMER ID</span>
               <span className="text-cyan-300 font-bold">{activeCustomer.customer_id}</span>

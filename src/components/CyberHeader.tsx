@@ -23,9 +23,9 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
   }, []);
 
   return (
-    <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-row items-center justify-between gap-4 z-20 relative">
+    <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-row items-center justify-between gap-2 sm:gap-4 z-20 relative">
       {/* Brand Identity - Clicking AEGIS logo opens ADMIN PANEL LOGIN */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <button
           type="button"
           id="aegis-brand-logo-btn"
@@ -33,7 +33,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
             cyberAudio.playClick(1200);
             onOpenAdminLogin();
           }}
-          className="flex items-center gap-3 group cursor-pointer text-left bg-transparent border-0 p-0 outline-none"
+          className="flex items-center gap-2 sm:gap-3 group cursor-pointer text-left bg-transparent border-0 p-0 outline-none"
           title="VERIFY // BUY Core Gateway (Click to open Admin Command Login)"
         >
           {/* Holographic Gateway Emblem */}
@@ -44,7 +44,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="font-display font-bold text-lg sm:text-xl tracking-widest text-white group-hover:text-cyan-200 transition-colors">
                 VERIFY <span className="text-cyan-400 font-light">//</span> BUY
               </span>
@@ -52,7 +52,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                 v4.8
               </span>
             </div>
-            <p className="text-[10px] font-mono-code text-slate-400 tracking-wider">
+            <p className="text-[10px] font-mono-code text-slate-400 tracking-wider hidden min-[360px]:block">
               VERIFY AND PURCHASE KEY GATEWAY
             </p>
           </div>

@@ -88,7 +88,7 @@ export const CyberPoWVerification: React.FC<CyberPoWVerificationProps> = ({
             setSliderPos(0);
           }
         }}
-        className={`relative h-12 w-full rounded-xl overflow-hidden select-none border transition-colors ${
+        className={`relative h-12 w-full rounded-xl overflow-hidden select-none border transition-colors touch-none ${
           isVerified
             ? 'bg-emerald-950/40 border-emerald-500/40'
             : isSolving

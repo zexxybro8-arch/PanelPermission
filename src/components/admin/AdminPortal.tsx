@@ -142,7 +142,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div className="min-h-screen bg-[#050811] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200 max-w-full overflow-x-hidden relative">
       {/* Background Neon Elements */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl" />
@@ -152,7 +152,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
 
       {/* Top Admin Navigation Header */}
       <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-xl border-b border-cyan-500/20 px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-[0_4px_30px_rgba(0,0,0,0.8)]">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -161,16 +161,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
             {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/60 flex items-center justify-center text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.3)]">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/60 hidden min-[380px]:flex items-center justify-center text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.3)] shrink-0">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-display font-black text-sm tracking-widest text-white">
+                <span className="font-display font-black text-xs sm:text-sm tracking-widest text-white">
                   VERIFY // BUY
                 </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono-code font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono-code font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40 hidden min-[400px]:inline-block">
                   ROOT ADMIN [LEVEL 5]
                 </span>
               </div>
