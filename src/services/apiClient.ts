@@ -118,7 +118,7 @@ export const apiClient = {
   // ==========================================
   // PORTAL & PRICING
   // ==========================================
-  async getPortalConfig(userId?: string): Promise<{ modules: CyberModule[]; plans: AdminRuntimePlan[]; userLicenses: AdminLicense[]; upiQrImage: string; settings: SystemSettingsData }> {
+  async getPortalConfig(userId?: string): Promise<{ modules: CyberModule[]; plans: AdminRuntimePlan[]; userLicenses: AdminLicense[]; upiQrImage: string; settings: SystemSettingsData; panel_permissions?: Record<string, any>; customer?: any }> {
     return appStore.getPortalConfig(userId);
   },
 

@@ -814,11 +814,11 @@ export class AppStore {
     customerId: string,
     panelId: string,
     permissions: {
-      verify_access?: boolean;
-      files_access?: boolean;
-      setup_access?: boolean;
+      verify_access?: boolean | string;
+      files_access?: boolean | string;
+      setup_access?: boolean | string;
       payment_status?: 'none' | 'pending' | 'approved' | 'rejected';
-      purchased?: boolean;
+      purchased?: boolean | string;
     }
   ): { success: boolean; message: string; panel_permissions: Record<string, any> } {
     const customer = this.state.customers.find(
@@ -838,12 +838,43 @@ export class AppStore {
       purchased: false,
     };
 
+    const cleanPermissions: Record<string, any> = {};
+    if (permissions.verify_access !== undefined) {
+      cleanPermissions.verify_access = Boolean(permissions.verify_access === true || permissions.verify_access === 'true' || permissions.verify_access === 'ON');
+    }
+    if (permissions.files_access !== undefined) {
+      cleanPermissions.files_access = Boolean(permissions.files_access === true || permissions.files_access === 'true' || permissions.files_access === 'ON');
+    }
+    if (permissions.setup_access !== undefined) {
+      cleanPermissions.setup_access = Boolean(permissions.setup_access === true || permissions.setup_access === 'true' || permissions.setup_access === 'ON');
+    }
+    if (permissions.purchased !== undefined) {
+      cleanPermissions.purchased = Boolean(permissions.purchased === true || permissions.purchased === 'true');
+    }
+    if (permissions.payment_status !== undefined) {
+      cleanPermissions.payment_status = permissions.payment_status;
+    }
+
     customer.panel_permissions[panelId] = {
       ...existing,
-      ...permissions,
+      ...cleanPermissions,
     };
 
     customer.updated_at = new Date().toISOString();
+
+    console.log('[ADMIN SAVE PERMISSIONS]', {
+      customerId: customer.customer_id,
+      panelId,
+      verify: customer.panel_permissions[panelId].verify_access,
+      files: customer.panel_permissions[panelId].files_access,
+      setup: customer.panel_permissions[panelId].setup_access,
+    });
+    console.log('[DATABASE RESPONSE PERMISSIONS]', {
+      customerId: customer.customer_id,
+      panelId,
+      savedPermissions: customer.panel_permissions[panelId],
+    });
+
     this.logActivity(
       'SAGAR551',
       'PANEL_PERMISSIONS_UPDATED',
@@ -896,6 +927,13 @@ export class AppStore {
     });
 
     customer.updated_at = new Date().toISOString();
+
+    console.log('[ADMIN SAVE BULK PERMISSIONS]', {
+      customerId: customer.customer_id,
+      action,
+      savedPermissions: customer.panel_permissions,
+    });
+
     this.logActivity(
       'SAGAR551',
       'BULK_PERMISSIONS_UPDATED',
@@ -923,20 +961,27 @@ export class AppStore {
       (c) => c.id === customerId || c.customer_id === customerId || c.username === customerId
     );
 
-    const permission = {
-      purchased: true,
-      payment_status: 'pending' as const,
-      verify_access: false,
-      files_access: false,
-      setup_access: false,
-      payment_ref: transactionRef || '',
-      payment_note: paymentNote || '',
-      purchased_at: new Date().toISOString(),
-    };
-
     if (customer) {
       if (!customer.panel_permissions) customer.panel_permissions = {};
-      const prev = customer.panel_permissions[panelId] || {};
+      const prev = customer.panel_permissions[panelId] || {
+        verify_access: false,
+        files_access: false,
+        setup_access: false,
+        payment_status: 'none',
+        purchased: false,
+      };
+
+      const permission = {
+        verify_access: Boolean(prev.verify_access) === true,
+        files_access: Boolean(prev.files_access) === true,
+        setup_access: Boolean(prev.setup_access) === true,
+        purchased: true,
+        payment_status: 'pending' as const,
+        payment_ref: transactionRef || '',
+        payment_note: paymentNote || '',
+        purchased_at: new Date().toISOString(),
+      };
+
       customer.panel_permissions[panelId] = {
         ...prev,
         ...permission,
@@ -967,14 +1012,21 @@ export class AppStore {
       this.saveToStorage();
       this.syncDocToFirestore('customers', customer.id, customer);
       this.syncDocToFirestore('orders', newOrder.id, newOrder);
+
+      return {
+        success: true,
+        message: 'PAYMENT RECEIVED // AWAITING ADMIN APPROVAL',
+        panel_id: panelId,
+        permission: customer.panel_permissions[panelId],
+        panel_permissions: customer.panel_permissions,
+      };
     }
 
     return {
-      success: true,
-      message: 'PAYMENT RECEIVED // AWAITING ADMIN APPROVAL',
+      success: false,
+      message: 'CUSTOMER NOT FOUND',
       panel_id: panelId,
-      permission,
-      panel_permissions: customer?.panel_permissions,
+      permission: null,
     };
   }
 
@@ -1242,6 +1294,16 @@ export class AppStore {
       userLicenses,
       upiQrImage: this.state.settings.upiQrImageUrl,
       settings: this.state.settings,
+      panel_permissions: customer?.panel_permissions || {},
+      customer: customer ? {
+        id: customer.id,
+        customer_id: customer.customer_id,
+        username: customer.username,
+        status: customer.status,
+        expiry_date: customer.expiry_date,
+        assigned_modules: customer.assigned_modules || [],
+        panel_permissions: customer.panel_permissions || {},
+      } : null,
     };
   }
 

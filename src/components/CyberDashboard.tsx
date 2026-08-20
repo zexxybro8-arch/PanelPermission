@@ -6,7 +6,7 @@ import {
   Flame, ChevronRight, ShieldCheck, LayoutDashboard, Radio, Shield,
   User, Copy, CheckCircle2, ImageIcon
 } from 'lucide-react';
-import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense } from '../types';
+import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense, PanelPermissionState } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
 import { PremiumPaymentModal } from './PremiumPaymentModal';
 import { apiClient } from '../services/apiClient';
@@ -60,6 +60,9 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [activeFilesModule, setActiveFilesModule] = useState<CyberModule | null>(null);
   const [activeSetupModule, setActiveSetupModule] = useState<CyberModule | null>(null);
 
+  const [livePermissions, setLivePermissions] = useState<Record<string, PanelPermissionState>>({});
+  const [liveCustomer, setLiveCustomer] = useState<any>(null);
+
   const handleOptionClick = (mod: CyberModule, type: 'VERIFY' | 'FILES' | 'SETUP', isAllowed: boolean, reason?: string) => {
     cyberAudio.playClick();
     if (!isAllowed) {
@@ -79,6 +82,16 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       setPlans(config.plans || []);
       setUserLicenses(config.userLicenses || []);
       if (config.upiQrImage) setUpiQrImage(config.upiQrImage);
+      if (config.panel_permissions) {
+        setLivePermissions(config.panel_permissions);
+        console.log('[CUSTOMER LOAD PERMISSIONS]', {
+          customerId: user.customer_id || user.id || user.username,
+          loadedPermissions: config.panel_permissions,
+        });
+      }
+      if (config.customer) {
+        setLiveCustomer(config.customer);
+      }
     } catch (err) {
       console.warn('Failed to load portal config:', err);
     }
@@ -338,17 +351,37 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
             const hasLicense = isCustomerModule || userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
             const hasValidImage = !!mod.imageUrl && !imageErrorMap[mod.id];
 
-            const isBlocked = user.status === 'blocked';
+            const isBlocked = (liveCustomer?.status || user.status) === 'blocked';
             const isExpired = daysRemaining !== null && daysRemaining < 0;
 
-            const rawPerms = user.panel_permissions?.[mod.id];
-            const panelPerms = {
-              verify_access: !isBlocked && !isExpired && Boolean(rawPerms?.verify_access),
-              files_access: !isBlocked && !isExpired && Boolean(rawPerms?.files_access),
-              setup_access: !isBlocked && !isExpired && Boolean(rawPerms?.setup_access),
-              purchased: Boolean(rawPerms?.purchased),
-              payment_status: rawPerms?.payment_status || (rawPerms?.purchased ? 'approved' : 'none'),
+            const rawPerms = (livePermissions && livePermissions[mod.id]) || user.panel_permissions?.[mod.id] || {
+              verify_access: false,
+              files_access: false,
+              setup_access: false,
+              purchased: false,
+              payment_status: 'none',
             };
+
+            const verifyUnlocked = Boolean(rawPerms.verify_access) === true;
+            const filesUnlocked = Boolean(rawPerms.files_access) === true;
+            const setupUnlocked = Boolean(rawPerms.setup_access) === true;
+
+            const panelPerms = {
+              verify_access: !isBlocked && !isExpired && verifyUnlocked,
+              files_access: !isBlocked && !isExpired && filesUnlocked,
+              setup_access: !isBlocked && !isExpired && setupUnlocked,
+              purchased: Boolean(rawPerms.purchased),
+              payment_status: rawPerms.payment_status || (rawPerms.purchased ? 'approved' : 'none'),
+            };
+
+            console.log('[ACCESS CHECK]', {
+              customerId: user.customer_id || user.id || user.username,
+              panelId: mod.id,
+              panelName: mod.name,
+              VERIFY: panelPerms.verify_access,
+              FILES: panelPerms.files_access,
+              SETUP: panelPerms.setup_access,
+            });
 
             const blockReason = isBlocked
               ? 'ACCOUNT BLOCKED: Please contact administrator.'
