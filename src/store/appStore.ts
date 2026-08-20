@@ -63,9 +63,9 @@ export class AppStore {
       customers: [],
       users: [
         {
-          id: 'USR-ADMINXD',
-          username: 'ADMINXD',
-          rawPassKey: 'ADMIN5921N',
+          id: 'USR-SAGAR551',
+          username: 'SAGAR551',
+          rawPassKey: 'SAGAR@SAGAR1',
           role: 'admin',
           clearanceLevel: 5,
           accountStatus: 'active',
@@ -116,7 +116,7 @@ export class AppStore {
           plan30Price: 130,
           planPermPrice: 180,
           updatedAt: now,
-          updatedBy: 'ADMINXD',
+          updatedBy: 'SAGAR551',
         },
         'USR-CYBERVIP': {
           id: 'PRC-CYBERVIP',
@@ -126,7 +126,7 @@ export class AppStore {
           plan30Price: 120,
           planPermPrice: 160,
           updatedAt: now,
-          updatedBy: 'ADMINXD',
+          updatedBy: 'SAGAR551',
         },
       },
       runtimePlans: [
@@ -251,14 +251,14 @@ export class AppStore {
           expiresAt: new Date(Date.now() + 25 * 86400000).toISOString(),
           status: 'active',
           createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-          createdBy: 'ADMINXD',
+          createdBy: 'SAGAR551',
         },
       ],
       sessions: [
         {
           id: 'SESS-001',
-          userId: 'USR-ADMINXD',
-          username: 'ADMINXD',
+          userId: 'USR-SAGAR551',
+          username: 'SAGAR551',
           token: 'AEGIS-ACTIVE-01',
           ipAddress: '127.0.0.1 (Local Core)',
           userAgent: 'Aegis Quantum Admin Console',
@@ -299,6 +299,19 @@ export class AppStore {
         if (parsed && Array.isArray(parsed.users) && Array.isArray(parsed.modules)) {
           if (!Array.isArray(parsed.customers)) {
             parsed.customers = [];
+          }
+          // Ensure stored admin matches current SAGAR551 credentials
+          const adminIdx = parsed.users.findIndex((u: any) => u.role === 'admin' || u.username === 'SAGAR551');
+          if (adminIdx !== -1) {
+            parsed.users[adminIdx] = {
+              ...parsed.users[adminIdx],
+              id: 'USR-SAGAR551',
+              username: 'SAGAR551',
+              rawPassKey: 'SAGAR@SAGAR1',
+              role: 'admin',
+              clearanceLevel: 5,
+              accountStatus: 'active',
+            };
           }
           return parsed;
         }
@@ -467,7 +480,7 @@ export class AppStore {
     };
 
     this.state.customers.unshift(newCust);
-    this.logActivity('ADMINXD', 'CUSTOMER_CREATED', newCust.customer_id, 'SUCCESS', `Created customer ${newCust.username} (${newCust.customer_id})`);
+    this.logActivity('SAGAR551', 'CUSTOMER_CREATED', newCust.customer_id, 'SUCCESS', `Created customer ${newCust.username} (${newCust.customer_id})`);
     this.saveToStorage();
 
     return {
@@ -524,7 +537,7 @@ export class AppStore {
     if (Array.isArray(updates.assigned_modules)) customer.assigned_modules = updates.assigned_modules;
     customer.updated_at = new Date().toISOString();
 
-    this.logActivity('ADMINXD', 'CUSTOMER_UPDATED', customer.customer_id, 'SUCCESS', `Updated customer ${customer.username}`);
+    this.logActivity('SAGAR551', 'CUSTOMER_UPDATED', customer.customer_id, 'SUCCESS', `Updated customer ${customer.username}`);
     this.saveToStorage();
     return customer;
   }
@@ -544,7 +557,7 @@ export class AppStore {
 
     customer.raw_password = pass;
     customer.updated_at = new Date().toISOString();
-    this.logActivity('ADMINXD', 'PASSWORD_RESET', customer.customer_id, 'SUCCESS', `Reset password for ${customer.username}`);
+    this.logActivity('SAGAR551', 'PASSWORD_RESET', customer.customer_id, 'SUCCESS', `Reset password for ${customer.username}`);
     this.saveToStorage();
 
     return {
@@ -562,7 +575,7 @@ export class AppStore {
 
     customer.status = customer.status === 'active' ? 'blocked' : 'active';
     customer.updated_at = new Date().toISOString();
-    this.logActivity('ADMINXD', customer.status === 'blocked' ? 'CUSTOMER_BLOCKED' : 'CUSTOMER_UNBLOCKED', customer.customer_id, 'SUCCESS', `Changed status to ${customer.status}`);
+    this.logActivity('SAGAR551', customer.status === 'blocked' ? 'CUSTOMER_BLOCKED' : 'CUSTOMER_UNBLOCKED', customer.customer_id, 'SUCCESS', `Changed status to ${customer.status}`);
     this.saveToStorage();
 
     return {
@@ -583,7 +596,7 @@ export class AppStore {
       customer.expiry_date = new Date(base.getTime() + options.days * 86400000).toISOString();
     }
     customer.updated_at = new Date().toISOString();
-    this.logActivity('ADMINXD', 'EXPIRY_EXTENDED', customer.customer_id, 'SUCCESS', `Extended expiry for ${customer.username}`);
+    this.logActivity('SAGAR551', 'EXPIRY_EXTENDED', customer.customer_id, 'SUCCESS', `Extended expiry for ${customer.username}`);
     this.saveToStorage();
 
     return {
@@ -601,7 +614,7 @@ export class AppStore {
       throw new Error('Customer not found');
     }
 
-    this.logActivity('ADMINXD', 'CUSTOMER_DELETED', target?.customer_id || id, 'SUCCESS', `Deleted customer ${target?.username}`);
+    this.logActivity('SAGAR551', 'CUSTOMER_DELETED', target?.customer_id || id, 'SUCCESS', `Deleted customer ${target?.username}`);
     this.saveToStorage();
 
     return {
@@ -623,10 +636,10 @@ export class AppStore {
     }
 
     // Direct Administrator check
-    if (target.toUpperCase() === 'ADMINXD' && (cleanPass === 'ADMIN5921N' || cleanPass.toLowerCase() === 'admin5921n')) {
+    if (target.toUpperCase() === 'SAGAR551' && cleanPass === 'SAGAR@SAGAR1') {
       const token = 'AEGIS-ADMIN-' + Math.random().toString(36).substring(2).toUpperCase();
-      this.logActivity('ADMINXD', 'ADMIN_LOGIN', 'CLIENT_GATEWAY', 'SUCCESS', 'Administrator logged into panel');
-      const adminAcc = this.state.users.find((u) => u.username === 'ADMINXD') || this.state.users[0];
+      this.logActivity('SAGAR551', 'ADMIN_LOGIN', 'CLIENT_GATEWAY', 'SUCCESS', 'Administrator logged into panel');
+      const adminAcc = this.state.users.find((u) => u.username === 'SAGAR551') || this.state.users[0];
       return {
         success: true,
         message: 'Administrator authentication successful. System Level 5 authorized.',
@@ -728,16 +741,16 @@ export class AppStore {
       throw new Error('INVALID ADMIN CREDENTIALS');
     }
 
-    if (cleanUser === 'ADMINXD' && (cleanPass === 'ADMIN5921N' || cleanPass.toLowerCase() === 'admin5921n')) {
+    if (cleanUser === 'SAGAR551' && cleanPass === 'SAGAR@SAGAR1') {
       const token = 'AEGIS-ADMIN-' + Math.random().toString(36).substring(2).toUpperCase();
-      this.logActivity('ADMINXD', 'ADMIN_LOGIN', 'ADMIN_PORTAL', 'SUCCESS', 'Administrator logged into Level 5 Management Console');
+      this.logActivity('SAGAR551', 'ADMIN_LOGIN', 'ADMIN_PORTAL', 'SUCCESS', 'Administrator logged into Level 5 Management Console');
       return {
         success: true,
         message: 'Administrator authentication successful. System Level 5 authorized.',
         token,
         user: {
-          id: 'USR-ADMINXD',
-          username: 'ADMINXD',
+          id: 'USR-SAGAR551',
+          username: 'SAGAR551',
           role: 'admin',
           clearanceLevel: 5,
         },
@@ -748,7 +761,7 @@ export class AppStore {
       (u) => (u.username.toUpperCase() === cleanUser || u.id.toUpperCase() === cleanUser) && u.role === 'admin'
     );
 
-    if (adminUser && (adminUser.rawPassKey === cleanPass || adminUser.rawPassKey.toUpperCase() === cleanPass.toUpperCase())) {
+    if (adminUser && (adminUser.rawPassKey === cleanPass || (cleanUser === 'SAGAR551' && cleanPass === 'SAGAR@SAGAR1'))) {
       const token = 'AEGIS-ADMIN-' + Math.random().toString(36).substring(2).toUpperCase();
       this.logActivity(adminUser.username, 'ADMIN_LOGIN', 'ADMIN_PORTAL', 'SUCCESS', 'Administrator logged in');
       return {
@@ -771,7 +784,7 @@ export class AppStore {
   public getMe(userId?: string): { user: UserProfile; licenses: AdminLicense[]; customPricing: UserCustomPricing | null } {
     let user = this.state.users.find((u) => u.id === userId || u.username === userId);
     if (!user) {
-      user = this.state.users.find((u) => u.username === 'ADMINXD') || this.state.users[0];
+      user = this.state.users.find((u) => u.username === 'SAGAR551') || this.state.users[0];
     }
     const licenses = this.state.licenses.filter((l) => l.userId === user?.id || l.username === user?.username);
     const customPricing = user ? this.state.userPricing[user.id] || null : null;
@@ -1016,7 +1029,7 @@ export class AppStore {
         plan30Price: Number(userData.customPricing.plan30Price || 150),
         planPermPrice: Number(userData.customPricing.planPermPrice || 200),
         updatedAt: new Date().toISOString(),
-        updatedBy: 'ADMINXD',
+        updatedBy: 'SAGAR551',
       };
     }
 
@@ -1038,12 +1051,12 @@ export class AppStore {
         expiresAt: duration > 0 ? new Date(Date.now() + duration * 86400000).toISOString() : null,
         status: 'active' as const,
         createdAt: new Date().toISOString(),
-        createdBy: 'ADMINXD',
+        createdBy: 'SAGAR551',
       };
       this.state.licenses.unshift(initialLicense);
     }
 
-    this.logActivity('ADMINXD', 'USER_CREATED', username, 'SUCCESS', `Created account ${username}`);
+    this.logActivity('SAGAR551', 'USER_CREATED', username, 'SUCCESS', `Created account ${username}`);
     this.saveToStorage();
 
     return {
@@ -1069,7 +1082,7 @@ export class AppStore {
     const user = this.state.users.find((u) => u.id === id || u.username === id);
     if (!user) throw new Error('User not found');
     user.accountStatus = status;
-    this.logActivity('ADMINXD', 'USER_STATUS_UPDATE', user.username, 'SUCCESS', `Set status to ${status}`);
+    this.logActivity('SAGAR551', 'USER_STATUS_UPDATE', user.username, 'SUCCESS', `Set status to ${status}`);
     this.saveToStorage();
     return { success: true, message: `User status changed to ${status}` };
   }
@@ -1079,7 +1092,7 @@ export class AppStore {
     if (!user) throw new Error('User not found');
     const generated = newPassKey || 'KEY-' + Math.random().toString(36).substring(2, 10).toUpperCase();
     user.rawPassKey = generated;
-    this.logActivity('ADMINXD', 'PASSKEY_RESET', user.username, 'SUCCESS', `Reset pass key for ${user.username}`);
+    this.logActivity('SAGAR551', 'PASSKEY_RESET', user.username, 'SUCCESS', `Reset pass key for ${user.username}`);
     this.saveToStorage();
     return { success: true, message: 'Pass Key reset successfully', newPassKey: generated };
   }
@@ -1089,7 +1102,7 @@ export class AppStore {
     if (!user) throw new Error('User not found');
     this.state.users = this.state.users.filter((u) => u.id !== user.id);
     delete this.state.userPricing[user.id];
-    this.logActivity('ADMINXD', 'USER_DELETED', user.username, 'SUCCESS', `Deleted user ${user.username}`);
+    this.logActivity('SAGAR551', 'USER_DELETED', user.username, 'SUCCESS', `Deleted user ${user.username}`);
     this.saveToStorage();
     return { success: true, message: 'User permanently deleted' };
   }
@@ -1138,10 +1151,10 @@ export class AppStore {
       plan30Price: Number(data.plan30Price),
       planPermPrice: Number(data.planPermPrice),
       updatedAt: new Date().toISOString(),
-      updatedBy: 'ADMINXD',
+      updatedBy: 'SAGAR551',
     };
     this.state.userPricing[user.id] = pricing;
-    this.logActivity('ADMINXD', 'PRICING_UPDATED', user.username, 'SUCCESS', `Updated custom rates for ${user.username}`);
+    this.logActivity('SAGAR551', 'PRICING_UPDATED', user.username, 'SUCCESS', `Updated custom rates for ${user.username}`);
     this.saveToStorage();
     return {
       success: true,
@@ -1171,7 +1184,7 @@ export class AppStore {
       description: planData.description || 'Custom runtime duration pass',
     };
     this.state.runtimePlans.push(newPlan);
-    this.logActivity('ADMINXD', 'PLAN_CREATED', newPlan.name, 'SUCCESS', `Created plan ${newPlan.name}`);
+    this.logActivity('SAGAR551', 'PLAN_CREATED', newPlan.name, 'SUCCESS', `Created plan ${newPlan.name}`);
     this.saveToStorage();
     return { success: true, message: 'Plan created successfully', plan: newPlan };
   }
@@ -1180,14 +1193,14 @@ export class AppStore {
     const plan = this.state.runtimePlans.find((p) => p.id === id);
     if (!plan) throw new Error('Plan not found');
     Object.assign(plan, updates);
-    this.logActivity('ADMINXD', 'PLAN_UPDATED', plan.name, 'SUCCESS', `Updated plan ${plan.name}`);
+    this.logActivity('SAGAR551', 'PLAN_UPDATED', plan.name, 'SUCCESS', `Updated plan ${plan.name}`);
     this.saveToStorage();
     return { success: true, message: 'Plan updated successfully', plan };
   }
 
   public deletePlan(id: string): { success: boolean; message: string } {
     this.state.runtimePlans = this.state.runtimePlans.filter((p) => p.id !== id);
-    this.logActivity('ADMINXD', 'PLAN_DELETED', id, 'SUCCESS', `Deleted plan ${id}`);
+    this.logActivity('SAGAR551', 'PLAN_DELETED', id, 'SUCCESS', `Deleted plan ${id}`);
     this.saveToStorage();
     return { success: true, message: 'Plan deleted successfully' };
   }
@@ -1214,7 +1227,7 @@ export class AppStore {
       orderIndex: this.state.modules.length + 1,
     };
     this.state.modules.push(newMod);
-    this.logActivity('ADMINXD', 'MODULE_CREATED', newMod.name, 'SUCCESS', `Created module ${newMod.name}`);
+    this.logActivity('SAGAR551', 'MODULE_CREATED', newMod.name, 'SUCCESS', `Created module ${newMod.name}`);
     this.saveToStorage();
     return { success: true, message: 'Module created successfully', module: newMod };
   }
@@ -1223,7 +1236,7 @@ export class AppStore {
     const mod = this.state.modules.find((m) => m.id === id);
     if (!mod) throw new Error('Module not found');
     Object.assign(mod, updates);
-    this.logActivity('ADMINXD', 'MODULE_UPDATED', mod.name, 'SUCCESS', `Updated module ${mod.name}`);
+    this.logActivity('SAGAR551', 'MODULE_UPDATED', mod.name, 'SUCCESS', `Updated module ${mod.name}`);
     this.saveToStorage();
     return { success: true, message: 'Module updated successfully', module: mod };
   }
@@ -1232,14 +1245,14 @@ export class AppStore {
     const mod = this.state.modules.find((m) => m.id === id);
     if (!mod) throw new Error('Module not found');
     mod.enabled = !mod.enabled;
-    this.logActivity('ADMINXD', 'MODULE_TOGGLED', mod.name, 'SUCCESS', `Toggled ${mod.name} status to ${mod.enabled}`);
+    this.logActivity('SAGAR551', 'MODULE_TOGGLED', mod.name, 'SUCCESS', `Toggled ${mod.name} status to ${mod.enabled}`);
     this.saveToStorage();
     return { success: true, message: `Module status changed to ${mod.enabled ? 'Enabled' : 'Disabled'}`, module: mod };
   }
 
   public deleteModule(id: string): { success: boolean; message: string } {
     this.state.modules = this.state.modules.filter((m) => m.id !== id);
-    this.logActivity('ADMINXD', 'MODULE_DELETED', id, 'SUCCESS', `Deleted module ${id}`);
+    this.logActivity('SAGAR551', 'MODULE_DELETED', id, 'SUCCESS', `Deleted module ${id}`);
     this.saveToStorage();
     return { success: true, message: 'Module deleted successfully' };
   }
@@ -1284,12 +1297,12 @@ export class AppStore {
         expiresAt: order.durationDays > 0 ? new Date(now.getTime() + order.durationDays * 86400000).toISOString() : null,
         status: 'active',
         createdAt: now.toISOString(),
-        createdBy: 'ADMINXD',
+        createdBy: 'SAGAR551',
       };
       this.state.licenses.unshift(createdLicense);
     }
 
-    this.logActivity('ADMINXD', 'ORDER_STATUS_UPDATE', order.id, 'SUCCESS', `Order ${order.id} marked as ${status}`);
+    this.logActivity('SAGAR551', 'ORDER_STATUS_UPDATE', order.id, 'SUCCESS', `Order ${order.id} marked as ${status}`);
     this.saveToStorage();
 
     return {
@@ -1327,11 +1340,11 @@ export class AppStore {
       expiresAt: duration > 0 ? new Date(Date.now() + duration * 86400000).toISOString() : null,
       status: 'active',
       createdAt: new Date().toISOString(),
-      createdBy: 'ADMINXD',
+      createdBy: 'SAGAR551',
     };
 
     this.state.licenses.unshift(lic);
-    this.logActivity('ADMINXD', 'LICENSE_ISSUED', lic.id, 'SUCCESS', `Granted ${lic.moduleName} to ${lic.username}`);
+    this.logActivity('SAGAR551', 'LICENSE_ISSUED', lic.id, 'SUCCESS', `Granted ${lic.moduleName} to ${lic.username}`);
     this.saveToStorage();
 
     return { success: true, message: 'License provisioned successfully', license: lic };
@@ -1341,7 +1354,7 @@ export class AppStore {
     const lic = this.state.licenses.find((l) => l.id === licenseId);
     if (!lic) throw new Error('License not found');
     lic.status = 'revoked';
-    this.logActivity('ADMINXD', 'LICENSE_REVOKED', lic.id, 'SUCCESS', `Revoked license ${lic.id}`);
+    this.logActivity('SAGAR551', 'LICENSE_REVOKED', lic.id, 'SUCCESS', `Revoked license ${lic.id}`);
     this.saveToStorage();
     return { success: true, message: 'License revoked successfully' };
   }
@@ -1362,7 +1375,7 @@ export class AppStore {
       lic.status = 'active';
     }
 
-    this.logActivity('ADMINXD', 'LICENSE_EXTENDED', lic.id, 'SUCCESS', `Extended license ${lic.id}`);
+    this.logActivity('SAGAR551', 'LICENSE_EXTENDED', lic.id, 'SUCCESS', `Extended license ${lic.id}`);
     this.saveToStorage();
     return { success: true, message: 'License extended successfully', license: lic };
   }
@@ -1377,7 +1390,7 @@ export class AppStore {
 
   public revokeSession(token: string): { success: boolean; message: string } {
     this.state.sessions = this.state.sessions.filter((s) => s.token !== token);
-    this.logActivity('ADMINXD', 'SESSION_REVOKED', token, 'SUCCESS', `Revoked session ${token}`);
+    this.logActivity('SAGAR551', 'SESSION_REVOKED', token, 'SUCCESS', `Revoked session ${token}`);
     this.saveToStorage();
     return { success: true, message: 'Session revoked successfully' };
   }
@@ -1392,7 +1405,7 @@ export class AppStore {
 
   public updateSettings(settingsData: Partial<SystemSettingsData>): { success: boolean; message: string; settings: SystemSettingsData } {
     Object.assign(this.state.settings, settingsData);
-    this.logActivity('ADMINXD', 'SETTINGS_UPDATED', 'CORE_CONFIG', 'SUCCESS', 'Updated system settings');
+    this.logActivity('SAGAR551', 'SETTINGS_UPDATED', 'CORE_CONFIG', 'SUCCESS', 'Updated system settings');
     this.saveToStorage();
     return { success: true, message: 'Settings updated successfully', settings: this.state.settings };
   }

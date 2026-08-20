@@ -252,7 +252,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
 
           <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-[11px] font-mono-code space-y-1 text-slate-400">
             <div className="flex items-center justify-between text-slate-300 font-bold">
-              <span>ADMIN: ADMINXD</span>
+              <span>ADMIN: SAGAR551</span>
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
             </div>
             <p className="text-[10px] text-slate-500">Post-Quantum SHA-256 Session Encrypted</p>

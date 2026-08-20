@@ -91,7 +91,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
     loadPortalConfig();
   };
 
-  const isAdmin = user.role === 'admin' || user.clearanceLevel >= 5 || user.username === 'ADMINXD';
+  const isAdmin = user.role === 'admin' || user.clearanceLevel >= 5 || user.username === 'SAGAR551';
 
   // Calculate days remaining for customer
   const now = new Date();

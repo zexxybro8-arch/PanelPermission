@@ -12,7 +12,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onSuccess,
   onCancel,
 }) => {
-  const [username, setUsername] = useState('ADMINXD');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +26,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       const data = await apiClient.adminLogin(username.trim(), password.trim());
       onSuccess(data.user);
     } catch (err: unknown) {
-      const errorMsg = extractErrorMessage(err, 'Admin authentication failed. Invalid master key.');
+      const errorMsg = extractErrorMessage(err, 'INVALID ADMIN CREDENTIALS');
       setError(errorMsg);
     } finally {
       setLoading(false);
@@ -58,7 +58,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[11px] font-mono-code font-bold text-slate-300 flex items-center gap-2">
               <User className="w-3.5 h-3.5 text-cyan-400" />
@@ -67,9 +67,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             <input
               type="text"
               required
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. ADMINXD"
+              placeholder="Enter Admin ID"
               className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm font-mono-code text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 outline-none uppercase"
             />
           </div>
@@ -82,9 +86,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             <input
               type="password"
               required
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
+              placeholder="Enter Admin Password"
               className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-sm font-mono-code text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 outline-none"
             />
           </div>

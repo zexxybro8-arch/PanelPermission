@@ -75,7 +75,7 @@ export default function App() {
             username: parsed.username,
             codename: `${parsed.username}_OPERATOR`,
             clearanceLevel: parsed.clearanceLevel || 3,
-            role: parsed.role || (parsed.username === 'ADMINXD' ? 'admin' : 'user'),
+            role: parsed.role || (parsed.username === 'SAGAR551' ? 'admin' : 'user'),
             terminalId: parsed.terminalId || `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
             ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
             nodeRegion: parsed.nodeRegion || 'Asia-SE',
