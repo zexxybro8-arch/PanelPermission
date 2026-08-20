@@ -20,9 +20,36 @@ const INITIAL_LOGS: TelemetryLog[] = [
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+  const [isValidating, setIsValidating] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('aegis_auth_session');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return !!(parsed && parsed.token && parsed.expiresAt && parsed.expiresAt > Date.now());
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  });
   const [currentView, setCurrentView] = useState<'portal' | 'admin'>(() => {
     return window.location.pathname.startsWith('/admin') || window.location.hash === '#admin' ? 'admin' : 'portal';
   });
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('aegis_auth_session');
+      localStorage.removeItem('aegis_auth_token');
+      localStorage.removeItem('aegis_admin_token');
+    } catch {
+      // ignore
+    }
+    setUser(null);
+    if (window.location.pathname !== '/' && !window.location.pathname.startsWith('/admin')) {
+      window.history.replaceState({}, '', '/');
+      window.dispatchEvent(new Event('popstate'));
+    }
+  };
 
   // Modals state
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
@@ -58,41 +85,96 @@ export default function App() {
     setCurrentView('portal');
   };
 
-  // Restore authenticated session from localStorage
+  // Securely verify session token with backend database
   useEffect(() => {
-    try {
-      const storedSession = localStorage.getItem('aegis_auth_session');
-      if (storedSession) {
-        const parsed = JSON.parse(storedSession);
-        if (
-          parsed &&
-          parsed.token &&
-          parsed.expiresAt &&
-          parsed.expiresAt > Date.now()
-        ) {
-          const restoredUser: UserProfile = {
-            id: parsed.id || 'USR-10025',
-            username: parsed.username,
-            codename: `${parsed.username}_OPERATOR`,
-            clearanceLevel: parsed.clearanceLevel || 3,
-            role: parsed.role || (parsed.username === 'SAGAR551' ? 'admin' : 'user'),
-            terminalId: parsed.terminalId || `TERM-${Math.floor(1000 + Math.random() * 9000)}-X`,
-            ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
-            nodeRegion: parsed.nodeRegion || 'Asia-SE',
-            avatarSeed: parsed.username,
-            sessionToken: parsed.token,
-            loginTime: new Date(parsed.createdAt || Date.now()).toISOString(),
-            email: parsed.email,
-          };
-          setUser(restoredUser);
-        } else {
-          localStorage.removeItem('aegis_auth_session');
+    let active = true;
+    const verifySession = async () => {
+      try {
+        const storedSession = localStorage.getItem('aegis_auth_session');
+        if (storedSession) {
+          const parsed = JSON.parse(storedSession);
+          if (
+            parsed &&
+            parsed.token &&
+            parsed.expiresAt &&
+            parsed.expiresAt > Date.now()
+          ) {
+            const res = await fetch('/api/me', {
+              headers: {
+                'Authorization': `Bearer ${parsed.token}`
+              }
+            });
+
+            if (!res.ok) {
+              throw new Error('Unauthorized or expired session');
+            }
+
+            const data = await res.json();
+            if (active) {
+              if (data.success && data.user) {
+                const validatedUser: UserProfile = {
+                  id: data.user.id,
+                  customer_id: data.user.customer_id,
+                  username: data.user.username,
+                  codename: `OPERATOR-${data.user.username.replace(/[^A-Z0-9]/gi, '')}`,
+                  clearanceLevel: data.user.clearanceLevel || 3,
+                  role: data.user.role || (data.user.username === 'SAGAR551' ? 'admin' : 'user'),
+                  terminalId: `TERM-CUST-${data.user.customer_id ? data.user.customer_id.replace(/[^A-Z0-9]/gi, '') : 'X'}`,
+                  ipAddress: '192.168.1.104 [VPN ENCRYPTED]',
+                  nodeRegion: 'Asia-SE',
+                  avatarSeed: data.user.username,
+                  sessionToken: parsed.token,
+                  loginTime: new Date(parsed.createdAt || Date.now()).toISOString(),
+                  email: data.user.email || `${data.user.username}@aegis-defense.internal`,
+                  price: data.user.price,
+                  expiry_date: data.user.expiry_date,
+                  assigned_modules: data.user.assigned_modules || [],
+                  panel_permissions: data.user.panel_permissions || {},
+                };
+                setUser(validatedUser);
+              } else {
+                handleLogout();
+              }
+            }
+          } else {
+            handleLogout();
+          }
+        }
+      } catch (err) {
+        if (active) {
+          handleLogout();
+        }
+      } finally {
+        if (active) {
+          setIsValidating(false);
         }
       }
-    } catch {
-      localStorage.removeItem('aegis_auth_session');
-    }
+    };
+
+    verifySession();
+    return () => {
+      active = false;
+    };
   }, []);
+
+  // Redirect unauthenticated visitors trying to access protected paths
+  useEffect(() => {
+    if (!isValidating && !user) {
+      const path = window.location.pathname;
+      if (path !== '/' && !path.startsWith('/admin')) {
+        window.history.replaceState({}, '', '/');
+        window.dispatchEvent(new Event('popstate'));
+      }
+    }
+  }, [isValidating, user]);
+
+  // Redirect authenticated user at root `/` to `/dashboard`
+  useEffect(() => {
+    if (user && window.location.pathname === '/') {
+      window.history.replaceState({}, '', '/dashboard');
+      window.dispatchEvent(new Event('popstate'));
+    }
+  }, [user]);
 
   // Periodic Telemetry Simulator
   useEffect(() => {
@@ -147,22 +229,40 @@ export default function App() {
     } catch {
       // ignore
     }
-  };
-
-  const handleLogout = () => {
-    try {
-      localStorage.removeItem('aegis_auth_session');
-      localStorage.removeItem('aegis_auth_token');
-      localStorage.removeItem('aegis_admin_token');
-    } catch {
-      // ignore
-    }
-    setUser(null);
+    window.history.pushState({}, '', '/dashboard');
+    window.dispatchEvent(new Event('popstate'));
   };
 
   const handleClearLogs = () => {
     setLogs([]);
   };
+
+  // If restoring / validating secure session
+  if (isValidating) {
+    return (
+      <div className="min-h-screen bg-[#06080d] text-slate-100 relative flex flex-col justify-center items-center overflow-hidden font-mono-code select-none">
+        <CyberNetworkCanvas interactive={false} />
+        <div className="relative z-10 flex flex-col items-center gap-6 p-8 rounded-3xl cyber-glass border border-cyan-500/20 shadow-[0_0_50px_rgba(0,242,254,0.15)] max-w-sm w-full mx-4">
+          <div className="relative w-20 h-20">
+            <div className="absolute inset-0 rounded-full border-4 border-cyan-500/10" />
+            <div className="absolute inset-0 rounded-full border-4 border-t-cyan-400 border-r-cyan-400 animate-spin" />
+            <div className="absolute inset-2 rounded-full border border-dashed border-cyan-500/30 animate-pulse" />
+          </div>
+          <div className="text-center space-y-2">
+            <h3 className="text-sm font-display font-bold text-white tracking-widest uppercase">
+              AUTHORIZING QUANTUM LINK
+            </h3>
+            <p className="text-[10px] text-cyan-400/70 uppercase tracking-widest animate-pulse">
+              Verifying Cryptographic Session...
+            </p>
+          </div>
+          <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden border border-slate-900">
+            <div className="h-full bg-cyan-400 animate-pulse" style={{ width: '60%' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // If viewing Admin Panel route: /admin
   if (currentView === 'admin') {

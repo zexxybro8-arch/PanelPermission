@@ -4,7 +4,7 @@ import {
   ArrowLeft, Terminal, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
   Flame, ChevronRight, ShieldCheck, LayoutDashboard, Radio, Shield,
-  User, Copy, CheckCircle2, ImageIcon
+  User, Copy, CheckCircle2, ImageIcon, FileText, Settings
 } from 'lucide-react';
 import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense, PanelPermissionState } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
@@ -446,54 +446,66 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                     </p>
                   )}
 
-                  {/* FOUR MAIN OPTIONS: VERIFY, FILES, SETUP, BUY */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
-                    {/* 1. VERIFY */}
+                  {/* FOUR MAIN OPTIONS: VERIFY, FILES, SETUP, BUY (2x2 Layout) */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-800/80">
+                    {/* ROW 1 - LEFT: VERIFY */}
                     <button
                       type="button"
                       onClick={() => handleOptionClick(mod, 'VERIFY', panelPerms.verify_access, blockReason)}
-                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`h-9 px-3 rounded-xl border text-[11px] font-mono-code font-bold tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-[0.98] focus:outline-none focus:ring-1 focus:ring-cyan-400/60 focus:ring-offset-1 focus:ring-offset-slate-950 cursor-pointer ${
                         panelPerms.verify_access
-                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
-                          : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                          ? 'bg-slate-900/90 hover:bg-slate-800/90 text-cyan-300 border-cyan-500/40 hover:border-cyan-400 hover:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:shadow-[0_0_12px_rgba(0,242,254,0.18)]'
+                          : 'bg-slate-950/70 hover:bg-slate-900/80 text-slate-400 border-slate-800/90 hover:border-slate-700 hover:text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]'
                       }`}
                       title={panelPerms.verify_access ? 'Verify Panel' : 'Access Locked'}
                     >
-                      {panelPerms.verify_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
+                      {panelPerms.verify_access ? (
+                        <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      ) : (
+                        <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      )}
                       <span>VERIFY</span>
                     </button>
 
-                    {/* 2. FILES */}
+                    {/* ROW 1 - RIGHT: FILES */}
                     <button
                       type="button"
                       onClick={() => handleOptionClick(mod, 'FILES', panelPerms.files_access, blockReason)}
-                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`h-9 px-3 rounded-xl border text-[11px] font-mono-code font-bold tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-[0.98] focus:outline-none focus:ring-1 focus:ring-cyan-400/60 focus:ring-offset-1 focus:ring-offset-slate-950 cursor-pointer ${
                         panelPerms.files_access
-                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
-                          : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                          ? 'bg-slate-900/90 hover:bg-slate-800/90 text-cyan-300 border-cyan-500/40 hover:border-cyan-400 hover:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:shadow-[0_0_12px_rgba(0,242,254,0.18)]'
+                          : 'bg-slate-950/70 hover:bg-slate-900/80 text-slate-400 border-slate-800/90 hover:border-slate-700 hover:text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]'
                       }`}
                       title={panelPerms.files_access ? 'Panel Files' : 'Access Locked'}
                     >
-                      {panelPerms.files_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
+                      {panelPerms.files_access ? (
+                        <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      ) : (
+                        <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      )}
                       <span>FILES</span>
                     </button>
 
-                    {/* 3. SETUP */}
+                    {/* ROW 2 - LEFT: SETUP */}
                     <button
                       type="button"
                       onClick={() => handleOptionClick(mod, 'SETUP', panelPerms.setup_access, blockReason)}
-                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`h-9 px-3 rounded-xl border text-[11px] font-mono-code font-bold tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-[0.98] focus:outline-none focus:ring-1 focus:ring-cyan-400/60 focus:ring-offset-1 focus:ring-offset-slate-950 cursor-pointer ${
                         panelPerms.setup_access
-                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
-                          : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                          ? 'bg-slate-900/90 hover:bg-slate-800/90 text-cyan-300 border-cyan-500/40 hover:border-cyan-400 hover:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:shadow-[0_0_12px_rgba(0,242,254,0.18)]'
+                          : 'bg-slate-950/50 hover:bg-slate-900/60 text-slate-500 border-slate-850/60 hover:border-slate-800 opacity-60 hover:opacity-85 shadow-none'
                       }`}
-                      title={panelPerms.setup_access ? 'Panel Setup' : 'Access Locked'}
+                      title={panelPerms.setup_access ? 'Panel Setup' : 'Access Locked / Unavailable'}
                     >
-                      {panelPerms.setup_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
+                      {panelPerms.setup_access ? (
+                        <Settings className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      ) : (
+                        <Settings className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      )}
                       <span>SETUP</span>
                     </button>
 
-                    {/* 4. BUY (Strictly BUY / BUY AGAIN, never BOUGHT) */}
+                    {/* ROW 2 - RIGHT: BUY (Primary CTA) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -501,16 +513,20 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                         setActivePaywallModule(mod);
                         setIsPaywallOpen(true);
                       }}
-                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      className={`h-9 px-3 rounded-xl border text-[11px] font-mono-code font-bold tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-[0.98] focus:outline-none focus:ring-1 focus:ring-cyan-400/60 focus:ring-offset-1 focus:ring-offset-slate-950 cursor-pointer group/buy ${
                         panelPerms.purchased && panelPerms.payment_status === 'approved'
-                          ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50'
+                          ? 'bg-gradient-to-r from-cyan-950 via-slate-900 to-cyan-950 hover:from-cyan-900 hover:to-slate-850 text-cyan-200 border-cyan-500/60 hover:border-cyan-400 shadow-[0_0_12px_rgba(0,242,254,0.2)] hover:shadow-[0_0_18px_rgba(0,242,254,0.35)] shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
                           : panelPerms.purchased && panelPerms.payment_status === 'pending'
-                          ? 'bg-amber-950/80 text-amber-300 border-amber-500/40'
-                          : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-cyan-400/30 shadow-[0_0_15px_rgba(0,242,254,0.3)]'
+                          ? 'bg-amber-950/80 hover:bg-amber-900/80 text-amber-300 border-amber-500/50 hover:border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)] hover:shadow-[0_0_18px_rgba(245,158,11,0.35)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                          : 'bg-gradient-to-r from-cyan-600 via-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white border-cyan-300/50 hover:border-cyan-200 shadow-[0_0_14px_rgba(0,242,254,0.25)] hover:shadow-[0_0_22px_rgba(0,242,254,0.45)] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]'
                       }`}
                       title="Purchase Panel"
                     >
-                      <Zap className="w-3.5 h-3.5" />
+                      <Zap className={`w-3.5 h-3.5 shrink-0 ${
+                        panelPerms.purchased && panelPerms.payment_status === 'pending'
+                          ? 'text-amber-400'
+                          : 'text-cyan-200 fill-cyan-200/30'
+                      }`} />
                       <span>
                         {panelPerms.purchased && panelPerms.payment_status === 'approved'
                           ? 'BUY AGAIN'

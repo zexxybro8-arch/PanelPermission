@@ -11,11 +11,11 @@ const app = getApps().length > 0 ? getApp() : initializeApp({
   appId: firebaseConfig.appId,
 });
 
-// Target the custom database ID provisioned for this applet with long polling auto-detection
+// Target the custom database ID provisioned for this applet with forced long polling for proxy/iframe stability
 export const db = initializeFirestore(
   app,
   {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
   },
   firebaseConfig.firestoreDatabaseId || '(default)'
 );

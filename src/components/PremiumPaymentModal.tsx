@@ -21,32 +21,41 @@ interface RuntimePlanItem {
 
 const DEFAULT_RUNTIME_PLANS: RuntimePlanItem[] = [
   {
+    id: 'plan-15',
+    name: '15 DAYS RUNTIME',
+    price: '₹70',
+    numericPrice: 70,
+    duration: '15 Days',
+    durationDays: 15,
+    badge: 'BASIC',
+  },
+  {
+    id: 'plan-20',
+    name: '20 DAYS RUNTIME',
+    price: '₹90',
+    numericPrice: 90,
+    duration: '20 Days',
+    durationDays: 20,
+    badge: 'STANDARD',
+  },
+  {
     id: 'plan-30',
     name: '30 DAYS RUNTIME',
     price: '₹120',
     numericPrice: 120,
     duration: '30 Days',
     durationDays: 30,
-    badge: 'BASIC',
-  },
-  {
-    id: 'plan-60',
-    name: '60 DAYS RUNTIME',
-    price: '₹250',
-    numericPrice: 250,
-    duration: '60 Days',
-    durationDays: 60,
-    badge: 'STANDARD',
+    badge: 'RECOMMENDED',
     isPopular: true,
   },
   {
-    id: 'plan-90',
-    name: '90 DAYS RUNTIME',
+    id: 'plan-permanent',
+    name: 'PERMANENT RUNTIME',
     price: '₹400',
     numericPrice: 400,
-    duration: '90 Days',
-    durationDays: 90,
-    badge: 'RECOMMENDED',
+    duration: 'Lifetime',
+    durationDays: 3650,
+    badge: 'LIFETIME',
   },
 ];
 
@@ -86,14 +95,15 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
     ? plans.map((p) => {
         const pNum = p.userPrice ?? p.defaultPrice ?? 120;
         const dDays = p.durationDays ?? 30;
+        const isPermanent = dDays < 0 || dDays === 3650 || (p.name || '').toUpperCase().includes('PERMANENT') || p.badge === 'LIFETIME';
         return {
           id: p.id,
-          name: p.name || `${dDays} DAYS RUNTIME`,
+          name: isPermanent ? 'PERMANENT RUNTIME' : (p.name || `${dDays} DAYS RUNTIME`),
           price: `₹${pNum}`,
           numericPrice: pNum,
-          duration: `${dDays} Days`,
+          duration: isPermanent ? 'Lifetime' : `${dDays} Days`,
           durationDays: dDays,
-          badge: p.badge || 'STANDARD',
+          badge: isPermanent ? 'LIFETIME' : (p.badge || 'STANDARD'),
           isPopular: p.isPopular,
         };
       })
@@ -148,6 +158,20 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
     setVerificationStatus(null);
     setActiveOrderId(null);
     onClose();
+  };
+
+  const handleSelectPlan = (plan: RuntimePlanItem) => {
+    cyberAudio.playClick(1000);
+    setSelectedPlan({
+      planId: plan.id,
+      planName: plan.name,
+      price: plan.price,
+      numericPrice: plan.numericPrice,
+      duration: plan.duration,
+      durationDays: plan.durationDays,
+      panelId: module?.id || '',
+      customerId: user?.id || user?.customer_id || user?.username || 'USER_10025',
+    });
   };
 
   const handleSelectAndPay = (plan: RuntimePlanItem) => {
@@ -246,20 +270,34 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={handleClose}
-          className="fixed inset-0 bg-[#04060a]/85 backdrop-blur-md"
+          className="fixed inset-0 bg-[#020408]/92 backdrop-blur-md"
         />
+
+        {/* Ambient Glow behind the modal */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+          <div className="w-[450px] h-[450px] bg-cyan-500/8 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '6s' }} />
+        </div>
 
         {/* Modal Window */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.94, y: 15 }}
+          initial={{ opacity: 0, scale: 0.96, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 15 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="relative w-full max-w-xl my-8 rounded-3xl cyber-glass border border-cyan-500/30 p-5 sm:p-7 shadow-[0_0_60px_-10px_rgba(0,242,254,0.35)] overflow-hidden z-10"
-          style={{
-            background: 'linear-gradient(145deg, rgba(13, 19, 32, 0.96) 0%, rgba(7, 10, 18, 0.98) 100%)',
-          }}
+          exit={{ opacity: 0, scale: 0.96, y: 12 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="relative w-full max-w-xl my-6 rounded-3xl bg-[#040712]/95 backdrop-blur-2xl border border-cyan-500/35 p-5 sm:p-7 shadow-[0_0_60px_-10px_rgba(0,242,254,0.25)] overflow-hidden z-10 max-h-[90vh] overflow-y-auto"
         >
+          <style dangerouslySetInnerHTML={{ __html: `
+            @keyframes shinesweep {
+              0% { left: -100%; }
+              100% { left: 200%; }
+            }
+          ` }} />
+
+          {/* Polished Glass Border & Light Sweep Accent */}
+          <div className="absolute inset-0 border border-cyan-500/25 rounded-3xl pointer-events-none z-20 overflow-hidden">
+            <div className="absolute top-0 -left-[100%] w-[50%] h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-60" style={{ animation: 'shinesweep 6s infinite linear' }} />
+          </div>
+
           {/* Top Glowing Metallic Accent Strip */}
           <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_12px_#00f2fe]" />
 
@@ -284,8 +322,9 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 tracking-wider">
-                    RUNTIME SELECTION
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 tracking-wider">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                    <span>SECURE CHECKOUT</span>
                   </span>
                   <button
                     type="button"
@@ -309,66 +348,81 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                 <p className="text-xs font-mono-code text-slate-400 max-w-md mx-auto">
                   Choose a runtime duration to authorize and dispatch the module.
                 </p>
-                             {/* 4 Runtime Plans List */}
-              <div className="space-y-2.5 pt-1">
+              </div>
+
+              {/* 4 Runtime Plans List */}
+              <div className="space-y-3 pt-1">
                 {availablePlans.map((plan) => {
                   const isSelected = selectedPlan?.planId === plan.id;
+                  const isRecommended = plan.durationDays === 30 || plan.name.includes('30') || plan.badge === 'RECOMMENDED' || plan.isPopular;
+                  const isLifetime = plan.durationDays < 0 || plan.durationDays === 3650 || plan.name.toUpperCase().includes('PERMANENT') || plan.badge === 'LIFETIME';
 
                   return (
                     <div
                       key={plan.id}
-                      onClick={() => {
-                        cyberAudio.playClick(1000);
-                        handleSelectAndPay(plan);
-                      }}
-                      className={`p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden group ${
+                      onClick={() => handleSelectPlan(plan)}
+                      className={`p-4 sm:p-5 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-row items-center justify-between gap-4 relative overflow-hidden group active:scale-[0.99] ${
                         isSelected
-                          ? 'bg-cyan-950/40 border-cyan-400/80 shadow-[0_0_20px_-5px_rgba(0,242,254,0.3)]'
-                          : 'bg-slate-950/70 border-slate-800/90 hover:border-slate-700 hover:bg-slate-900/60'
+                          ? 'bg-[#0a1122]/80 border-cyan-400/90 shadow-[0_0_20px_rgba(0,242,254,0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                          : 'bg-[#030611]/60 border-slate-800/80 hover:bg-[#070b1b]/85 hover:border-cyan-500/30 hover:shadow-[0_0_15px_rgba(0,242,254,0.1)] text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.01)]'
                       }`}
                     >
-                      {/* Left Side: Plan Duration & Badge */}
-                      <div className="flex items-center gap-3">
+                      {/* Left Side: Icon, Name & Badges */}
+                      <div className="flex items-start gap-3 sm:gap-3.5 flex-1 min-w-0">
                         <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all duration-200 ${
                             isSelected
-                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
-                              : 'bg-slate-900 border-slate-800 text-slate-500 group-hover:text-slate-300'
+                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(0,242,254,0.25)]'
+                              : 'bg-slate-900/90 border-slate-800 text-slate-500 group-hover:text-cyan-300 group-hover:border-cyan-500/40'
                           }`}
                         >
-                          <Zap className="w-4 h-4" />
+                          <Zap className={`w-4.5 h-4.5 ${isSelected ? 'animate-pulse text-cyan-300' : 'text-slate-500 group-hover:text-cyan-400'}`} />
                         </div>
 
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-display font-bold text-sm sm:text-base text-white tracking-wide">
-                              {plan.name}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="font-display font-bold text-sm sm:text-base text-white tracking-wide truncate">
+                              {isLifetime ? 'PERMANENT RUNTIME' : plan.name}
                             </span>
-                            {plan.badge && (
-                              <span
-                                className={`text-[9px] font-mono-code font-bold px-2 py-0.5 rounded-full border ${
-                                  plan.isPopular
-                                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-                                    : 'bg-slate-800 text-slate-400 border-slate-700'
-                                }`}
-                              >
+                            
+                            {isLifetime ? (
+                              <span className="text-[9px] font-mono-code font-bold px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.2)] animate-pulse">
+                                LIFETIME
+                              </span>
+                            ) : isRecommended ? (
+                              <span className="text-[9px] font-mono-code font-bold px-2 py-0.5 rounded-full border bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-[0_0_8px_rgba(0,242,254,0.2)]">
+                                RECOMMENDED
+                              </span>
+                            ) : plan.badge ? (
+                              <span className="text-[9px] font-mono-code font-bold px-2 py-0.5 rounded-full border bg-slate-800/90 text-slate-400 border-slate-700">
                                 {plan.badge}
+                              </span>
+                            ) : null}
+
+                            {isSelected && (
+                              <span className="text-[9px] font-mono-code font-bold px-2 py-0.5 rounded-full border bg-cyan-400/20 text-cyan-200 border-cyan-400/60 flex items-center gap-1">
+                                <CheckCircle2 className="w-2.5 h-2.5 text-cyan-400 animate-bounce" />
+                                <span className="animate-pulse">SELECTED</span>
                               </span>
                             )}
                           </div>
-                          <span className="text-[11px] font-mono-code text-slate-400 block">
-                            Duration: {plan.duration} — Direct authorization
+                          
+                          <span className={`text-xs font-mono-code block mt-1 font-semibold ${isSelected ? 'text-cyan-300' : 'text-slate-300'}`}>
+                            {isLifetime ? 'LIFETIME ACCESS' : `Duration: ${plan.duration}`}
+                          </span>
+                          <span className="text-[11px] font-mono-code text-slate-500 block mt-0.5 truncate">
+                            {isLifetime ? 'Unrestricted panel authorization dispatch' : 'Direct module authorization dispatch'}
                           </span>
                         </div>
                       </div>
 
-                      {/* Right Side: Price & PAY Button */}
-                      <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                      {/* Right Side: Price & PAY Button Column */}
+                      <div className="flex flex-col items-end justify-center shrink-0 w-24 sm:w-28 text-right gap-1.5 min-w-[90px] sm:min-w-[110px]">
                         <div className="text-right">
-                          <span className="font-display font-extrabold text-lg sm:text-xl text-white tracking-tight block">
+                          <span className="font-display font-extrabold text-lg sm:text-xl text-white tracking-tight block leading-none">
                             {plan.price}
                           </span>
-                          <span className="text-[9px] font-mono-code text-slate-500 block">INR</span>
+                          <span className="text-[9px] font-mono-code text-slate-500 block leading-none mt-1">INR</span>
                         </div>
 
                         <button
@@ -377,26 +431,27 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                             e.stopPropagation();
                             handleSelectAndPay(plan);
                           }}
-                          className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-display font-bold text-xs tracking-wider transition-all duration-200 cursor-pointer shadow-md ${
+                          className={`w-full h-8 px-2 sm:px-3 rounded-lg font-mono-code font-bold text-[10px] tracking-wider transition-all duration-200 ease-out active:scale-[0.98] focus:outline-none focus:ring-1 focus:ring-cyan-400/60 flex items-center justify-center gap-1 cursor-pointer ${
                             isSelected
-                              ? 'bg-gradient-to-r from-cyan-400 to-sky-300 hover:from-cyan-300 hover:to-sky-200 text-slate-950 shadow-[0_0_15px_rgba(0,242,254,0.4)]'
-                              : 'bg-slate-900 hover:bg-cyan-500/20 text-cyan-300 border border-slate-700 hover:border-cyan-400/50'
+                              ? 'bg-gradient-to-r from-cyan-400 via-sky-300 to-cyan-400 hover:from-cyan-300 hover:to-sky-200 text-slate-950 shadow-[0_0_14px_rgba(0,242,254,0.35)] font-extrabold'
+                              : 'bg-gradient-to-r from-cyan-500/20 to-sky-500/20 hover:from-cyan-500/30 hover:to-sky-500/30 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 hover:text-white shadow-[0_0_10px_rgba(0,242,254,0.15)]'
                           }`}
                         >
-                          PAY
+                          <Zap className="w-3 h-3 shrink-0" />
+                          <span>PAY</span>
                         </button>
                       </div>
                     </div>
                   );
                 })}
-              </div>  </div>
+              </div>
 
               {/* Bottom Cancel Button */}
               <div className="pt-2">
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="w-full py-3 px-6 rounded-xl font-mono-code text-xs text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-slate-800 transition-all text-center cursor-pointer"
+                  className="w-full py-3 px-6 rounded-xl font-mono-code text-xs text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800/80 hover:border-slate-700 transition-all text-center cursor-pointer active:scale-[0.99]"
                 >
                   CANCEL
                 </button>
