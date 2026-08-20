@@ -440,8 +440,8 @@ export const apiClient = {
     return appStore.getPortalConfig(userId);
   },
 
-  async createOrder(userId: string, moduleId: string, planId: string): Promise<{ order: AdminOrder; upiQrImageUrl: string }> {
-    return appStore.createOrder(userId, moduleId, planId);
+  async createOrder(userId: string, moduleId: string, planId: string, customPlan?: { planName: string; finalPrice: number; durationDays: number }): Promise<{ order: AdminOrder; upiQrImageUrl: string }> {
+    return appStore.createOrder(userId, moduleId, planId, customPlan);
   },
 
   async getOrder(orderId: string): Promise<AdminOrder> {

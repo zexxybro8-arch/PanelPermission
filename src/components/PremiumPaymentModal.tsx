@@ -13,39 +13,40 @@ interface RuntimePlanItem {
   name: string;
   price: string;
   numericPrice: number;
+  duration: string;
+  durationDays: number;
   badge?: string;
   isPopular?: boolean;
 }
 
 const DEFAULT_RUNTIME_PLANS: RuntimePlanItem[] = [
   {
-    id: 'plan-15',
-    name: '15 DAYS RUNTIME',
+    id: 'plan-30',
+    name: '30 DAYS RUNTIME',
     price: '₹120',
     numericPrice: 120,
+    duration: '30 Days',
+    durationDays: 30,
     badge: 'BASIC',
   },
   {
-    id: 'plan-20',
-    name: '20 DAYS RUNTIME',
-    price: '₹135',
-    numericPrice: 135,
+    id: 'plan-60',
+    name: '60 DAYS RUNTIME',
+    price: '₹250',
+    numericPrice: 250,
+    duration: '60 Days',
+    durationDays: 60,
     badge: 'STANDARD',
-  },
-  {
-    id: 'plan-30',
-    name: '30 DAYS RUNTIME',
-    price: '₹150',
-    numericPrice: 150,
-    badge: 'RECOMMENDED',
     isPopular: true,
   },
   {
-    id: 'plan-perm',
-    name: 'PERMANENT RUNTIME',
-    price: '₹200',
-    numericPrice: 200,
-    badge: 'LIFETIME',
+    id: 'plan-90',
+    name: '90 DAYS RUNTIME',
+    price: '₹400',
+    numericPrice: 400,
+    duration: '90 Days',
+    durationDays: 90,
+    badge: 'RECOMMENDED',
   },
 ];
 
@@ -61,6 +62,17 @@ interface PremiumPaymentModalProps {
   upiQrImage?: string;
 }
 
+interface SelectedPlanState {
+  planId: string;
+  planName: string;
+  price: string;
+  numericPrice: number;
+  duration: string;
+  durationDays: number;
+  panelId: string;
+  customerId: string;
+}
+
 export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
   module,
   isOpen,
@@ -71,17 +83,23 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
 }) => {
   // Map dynamic plans if provided
   const availablePlans: RuntimePlanItem[] = (plans && plans.length > 0)
-    ? plans.map((p) => ({
-        id: p.id,
-        name: p.name,
-        price: `₹${p.userPrice ?? p.defaultPrice}`,
-        numericPrice: p.userPrice ?? p.defaultPrice,
-        badge: p.badge,
-        isPopular: p.isPopular,
-      }))
+    ? plans.map((p) => {
+        const pNum = p.userPrice ?? p.defaultPrice ?? 120;
+        const dDays = p.durationDays ?? 30;
+        return {
+          id: p.id,
+          name: p.name || `${dDays} DAYS RUNTIME`,
+          price: `₹${pNum}`,
+          numericPrice: pNum,
+          duration: `${dDays} Days`,
+          durationDays: dDays,
+          badge: p.badge || 'STANDARD',
+          isPopular: p.isPopular,
+        };
+      })
     : DEFAULT_RUNTIME_PLANS;
 
-  const [selectedPlan, setSelectedPlan] = useState<RuntimePlanItem>(availablePlans[2] || availablePlans[0]);
+  const [selectedPlan, setSelectedPlan] = useState<SelectedPlanState | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<'plans' | 'method' | 'qr_payment'>('plans');
   const [timeLeft, setTimeLeft] = useState<number>(INITIAL_TIMER_SECONDS);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -89,11 +107,25 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [serverQrImage, setServerQrImage] = useState<string>(upiQrImage || DEFAULT_QR_IMAGE);
 
+  // Initialize selectedPlan once when modal opens or module changes. Do NOT overwrite on plans refetch.
   useEffect(() => {
-    if (availablePlans.length > 0) {
-      setSelectedPlan(availablePlans[2] || availablePlans[0]);
+    if (isOpen && module) {
+      const defaultPlan = availablePlans.find(p => p.isPopular) || availablePlans[0];
+      if (defaultPlan) {
+        setSelectedPlan({
+          planId: defaultPlan.id,
+          planName: defaultPlan.name,
+          price: defaultPlan.price,
+          numericPrice: defaultPlan.numericPrice,
+          duration: defaultPlan.duration,
+          durationDays: defaultPlan.durationDays,
+          panelId: module.id,
+          customerId: user?.id || user?.customer_id || user?.username || 'USER_10025',
+        });
+      }
+      setCheckoutStep('plans');
     }
-  }, [plans]);
+  }, [isOpen, module]);
 
   // Real-time 5:00 countdown timer for active QR payment session
   useEffect(() => {
@@ -120,19 +152,44 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
 
   const handleSelectAndPay = (plan: RuntimePlanItem) => {
     cyberAudio.playClick(1300);
-    setSelectedPlan(plan);
+    setSelectedPlan({
+      planId: plan.id,
+      planName: plan.name,
+      price: plan.price,
+      numericPrice: plan.numericPrice,
+      duration: plan.duration,
+      durationDays: plan.durationDays,
+      panelId: module?.id || '',
+      customerId: user?.id || user?.customer_id || user?.username || 'USER_10025',
+    });
     setCheckoutStep('method');
   };
 
   const handleProceedToQR = async () => {
+    if (
+      !selectedPlan ||
+      !selectedPlan.planId ||
+      !selectedPlan.price ||
+      !selectedPlan.duration ||
+      typeof selectedPlan.durationDays !== 'number' ||
+      !selectedPlan.panelId
+    ) {
+      alert("Please select a valid plan before continuing.");
+      return;
+    }
+
     cyberAudio.playClick(1400);
     setTimeLeft(INITIAL_TIMER_SECONDS);
     setVerificationStatus(null);
 
-    // Call real backend API to create order
+    // Call real backend API to create order with exact selected plan parameters
     try {
-      const currentUserId = user?.id || user?.username || 'USER_10025';
-      const orderRes = await apiClient.createOrder(currentUserId, module.id, selectedPlan.id);
+      const currentUserId = user?.id || user?.customer_id || user?.username || 'USER_10025';
+      const orderRes = await apiClient.createOrder(currentUserId, module.id, selectedPlan.planId, {
+        planName: selectedPlan.planName,
+        finalPrice: selectedPlan.numericPrice,
+        durationDays: selectedPlan.durationDays,
+      });
       setActiveOrderId(orderRes.order.id);
       if (orderRes.upiQrImageUrl) {
         setServerQrImage(orderRes.upiQrImageUrl);
@@ -252,19 +309,17 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                 <p className="text-xs font-mono-code text-slate-400 max-w-md mx-auto">
                   Choose a runtime duration to authorize and dispatch the module.
                 </p>
-              </div>
-
-              {/* 4 Runtime Plans List */}
+                             {/* 4 Runtime Plans List */}
               <div className="space-y-2.5 pt-1">
                 {availablePlans.map((plan) => {
-                  const isSelected = selectedPlan.id === plan.id;
+                  const isSelected = selectedPlan?.planId === plan.id;
 
                   return (
                     <div
                       key={plan.id}
                       onClick={() => {
                         cyberAudio.playClick(1000);
-                        setSelectedPlan(plan);
+                        handleSelectAndPay(plan);
                       }}
                       className={`p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden group ${
                         isSelected
@@ -302,7 +357,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                             )}
                           </div>
                           <span className="text-[11px] font-mono-code text-slate-400 block">
-                            Direct module access authorization
+                            Duration: {plan.duration} — Direct authorization
                           </span>
                         </div>
                       </div>
@@ -334,7 +389,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                     </div>
                   );
                 })}
-              </div>
+              </div>  </div>
 
               {/* Bottom Cancel Button */}
               <div className="pt-2">
@@ -388,20 +443,22 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
               </div>
 
               {/* Selected Plan Details Card */}
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/30 flex items-center justify-between shadow-inner">
-                <div>
-                  <span className="text-[10px] font-mono-code text-slate-400 block">SELECTED RUNTIME PLAN</span>
-                  <span className="text-sm font-display font-bold text-cyan-300">{selectedPlan.name}</span>
-                  <span className="text-[11px] font-mono-code text-slate-500 block">{module.name}</span>
-                </div>
+              {selectedPlan && (
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/30 flex items-center justify-between shadow-inner">
+                  <div>
+                    <span className="text-[10px] font-mono-code text-slate-400 block">SELECTED RUNTIME PLAN // {selectedPlan.duration}</span>
+                    <span className="text-sm font-display font-bold text-cyan-300">{selectedPlan.planName}</span>
+                    <span className="text-[11px] font-mono-code text-slate-500 block">Panel: {module.name} | Customer: {selectedPlan.customerId}</span>
+                  </div>
 
-                <div className="text-right">
-                  <span className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
-                    {selectedPlan.price}
-                  </span>
-                  <span className="text-[10px] font-mono-code text-slate-400 block">TOTAL AMOUNT</span>
+                  <div className="text-right">
+                    <span className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+                      {selectedPlan.price}
+                    </span>
+                    <span className="text-[10px] font-mono-code text-slate-400 block">TOTAL AMOUNT</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Single Payment Method: UPI QR */}
               <div className="space-y-2">
@@ -442,7 +499,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                   className="w-full py-3.5 px-6 rounded-xl font-display font-bold tracking-widest text-sm text-slate-950 bg-gradient-to-r from-cyan-400 via-sky-300 to-cyan-400 hover:from-cyan-300 hover:to-sky-200 transition-all duration-300 shadow-[0_0_25px_rgba(0,242,254,0.4)] flex items-center justify-center gap-2 cursor-pointer group"
                 >
                   <ShieldCheck className="w-4 h-4 text-slate-950 font-bold" />
-                  <span>PROCEED TO PAY {selectedPlan.price}</span>
+                  <span>PROCEED TO PAY {selectedPlan?.price || '₹120'}</span>
                 </button>
 
                 <button
@@ -493,19 +550,21 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
               </div>
 
               {/* Selected Plan Summary Banner */}
-              <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-left">
-                <div>
-                  <span className="text-[10px] font-mono-code text-slate-400 block">{module.name}</span>
-                  <span className="text-xs font-display font-bold text-white">{selectedPlan.name}</span>
-                  {activeOrderId && (
-                    <span className="text-[9px] font-mono-code text-slate-500 block">ORDER: {activeOrderId}</span>
-                  )}
+              {selectedPlan && (
+                <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-left">
+                  <div>
+                    <span className="text-[10px] font-mono-code text-slate-400 block">{module.name}</span>
+                    <span className="text-xs font-display font-bold text-white">{selectedPlan.planName} ({selectedPlan.duration})</span>
+                    {activeOrderId && (
+                      <span className="text-[9px] font-mono-code text-slate-500 block">ORDER: {activeOrderId}</span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className="font-display font-extrabold text-xl text-cyan-300">{selectedPlan.price}</span>
+                    <span className="text-[9px] font-mono-code text-slate-500 block">INR</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-display font-extrabold text-xl text-cyan-300">{selectedPlan.price}</span>
-                  <span className="text-[9px] font-mono-code text-slate-500 block">INR</span>
-                </div>
-              </div>
+              )}
 
               {/* Prominent QR Code Display */}
               <div className="relative mx-auto max-w-[240px] sm:max-w-[270px]">

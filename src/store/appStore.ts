@@ -869,32 +869,36 @@ export class AppStore {
     };
   }
 
-  public createOrder(userId: string, moduleId: string, planId: string): { order: AdminOrder; upiQrImageUrl: string } {
+  public createOrder(userId: string, moduleId: string, planId: string, customPlan?: { planName: string; finalPrice: number; durationDays: number }): { order: AdminOrder; upiQrImageUrl: string } {
     const user = this.state.users.find((u) => u.id === userId || u.username.toUpperCase() === userId.toUpperCase());
+    const customer = this.state.customers.find((c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase());
     const mod = this.state.modules.find((m) => m.id === moduleId);
     const plan = this.state.runtimePlans.find((p) => p.id === planId);
 
-    const targetUserId = user ? user.id : userId;
+    const targetUserId = user ? user.id : (customer ? customer.id : userId);
     const customPricing = this.state.userPricing[targetUserId];
 
-    let finalPrice = plan ? plan.defaultPrice : 150;
-    if (customPricing) {
+    let finalPrice = customPlan?.finalPrice ?? plan?.defaultPrice ?? customer?.price ?? 120;
+    if (!customPlan && customPricing) {
       if (planId === 'plan-15' && customPricing.plan15Price) finalPrice = customPricing.plan15Price;
-      if (planId === 'plan-20' && customPricing.plan20Price) finalPrice = customPricing.plan20Price;
-      if (planId === 'plan-30' && customPricing.plan30Price) finalPrice = customPricing.plan30Price;
-      if (planId === 'plan-perm' && customPricing.planPermPrice) finalPrice = customPricing.planPermPrice;
+      else if (planId === 'plan-20' && customPricing.plan20Price) finalPrice = customPricing.plan20Price;
+      else if (planId === 'plan-30' && customPricing.plan30Price) finalPrice = customPricing.plan30Price;
+      else if (planId === 'plan-perm' && customPricing.planPermPrice) finalPrice = customPricing.planPermPrice;
     }
+
+    const planName = customPlan?.planName ?? plan?.name ?? planId;
+    const durationDays = customPlan?.durationDays ?? plan?.durationDays ?? 30;
 
     const orderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
     const newOrder: AdminOrder = {
       id: orderId,
-      userId: user ? user.id : userId,
-      username: user ? user.username : userId,
+      userId: targetUserId,
+      username: user ? user.username : (customer ? customer.username : userId),
       moduleId,
       moduleName: mod ? mod.name : moduleId,
       planId,
-      planName: plan ? plan.name : planId,
-      durationDays: plan ? plan.durationDays : 30,
+      planName,
+      durationDays,
       finalPrice,
       paymentStatus: 'PENDING',
       transactionRef: 'UPI-TXN-' + Math.floor(1000000000 + Math.random() * 9000000000),

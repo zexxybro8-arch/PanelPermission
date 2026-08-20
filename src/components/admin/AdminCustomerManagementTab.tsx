@@ -755,11 +755,11 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                     
                     // Summarize payment and access permissions across panels
                     const panelPermsList = cust.panel_permissions ? Object.values(cust.panel_permissions) : [];
-                    const hasApproved = panelPermsList.some(p => p.payment_status === 'approved' || p.purchased);
-                    const hasPending = panelPermsList.some(p => p.payment_status === 'pending');
-                    const hasVerify = panelPermsList.some(p => p.verify_access);
-                    const hasFiles = panelPermsList.some(p => p.files_access);
-                    const hasSetup = panelPermsList.some(p => p.setup_access);
+                    const hasApproved = panelPermsList.some((p: any) => p?.payment_status === 'approved' || p?.purchased);
+                    const hasPending = panelPermsList.some((p: any) => p?.payment_status === 'pending');
+                    const hasVerify = panelPermsList.some((p: any) => p?.verify_access);
+                    const hasFiles = panelPermsList.some((p: any) => p?.files_access);
+                    const hasSetup = panelPermsList.some((p: any) => p?.setup_access);
 
                     return (
                       <tr
