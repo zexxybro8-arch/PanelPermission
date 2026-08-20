@@ -55,6 +55,22 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [imageErrorMap, setImageErrorMap] = useState<Record<string, boolean>>({});
 
+  const [lockedAlert, setLockedAlert] = useState<{ moduleName: string; type: string } | null>(null);
+  const [activeVerifyModule, setActiveVerifyModule] = useState<CyberModule | null>(null);
+  const [activeFilesModule, setActiveFilesModule] = useState<CyberModule | null>(null);
+  const [activeSetupModule, setActiveSetupModule] = useState<CyberModule | null>(null);
+
+  const handleOptionClick = (mod: CyberModule, type: 'VERIFY' | 'FILES' | 'SETUP', isAllowed: boolean) => {
+    cyberAudio.playClick();
+    if (!isAllowed) {
+      setLockedAlert({ moduleName: mod.name, type });
+      return;
+    }
+    if (type === 'VERIFY') setActiveVerifyModule(mod);
+    else if (type === 'FILES') setActiveFilesModule(mod);
+    else if (type === 'SETUP') setActiveSetupModule(mod);
+  };
+
   // Load live portal catalogue and personalized pricing from local store / server
   const loadPortalConfig = async () => {
     try {
@@ -322,6 +338,14 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
             const hasLicense = isCustomerModule || userLicenses.some((lic) => lic.moduleId === mod.id && lic.status === 'active');
             const hasValidImage = !!mod.imageUrl && !imageErrorMap[mod.id];
 
+            const panelPerms = user.panel_permissions?.[mod.id] || {
+              verify_access: hasLicense,
+              files_access: hasLicense,
+              setup_access: hasLicense,
+              purchased: hasLicense,
+              payment_status: hasLicense ? 'approved' : 'none'
+            };
+
             return (
               <motion.div
                 key={mod.id}
@@ -372,65 +396,82 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                         </div>
                       </div>
                     </div>
-
-                    {/* Animated ON/OFF Toggle */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-[11px] font-mono-code font-bold select-none ${hasLicense ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        {hasLicense ? 'ON' : 'OFF'}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => handleToggleModule(mod)}
-                        className={`w-12 h-6 rounded-full border p-0.5 transition-all duration-300 relative cursor-pointer focus:outline-none ${
-                          hasLicense
-                            ? 'bg-emerald-950/80 border-emerald-500/60'
-                            : 'bg-slate-900 border-slate-700 hover:border-cyan-400/60'
-                        }`}
-                        title={hasLicense ? `Active license on ${mod.name}` : `Request access for ${mod.name}`}
-                      >
-                        {/* Toggle Knob */}
-                        <motion.div
-                          className={`w-4.5 h-4.5 rounded-full shadow-md flex items-center justify-center ${
-                            hasLicense ? 'bg-emerald-400' : 'bg-slate-400 group-hover/toggle:bg-cyan-300'
-                          }`}
-                          animate={{ x: hasLicense ? 24 : 0 }}
-                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                        >
-                          <Lock className="w-2.5 h-2.5 text-slate-900" />
-                        </motion.div>
-                      </button>
-                    </div>
                   </div>
 
-                  {/* Neutral Description */}
-                  <p className="text-xs font-mono-code text-slate-400 leading-relaxed">
-                    {mod.description}
-                  </p>
-                </div>
+                  {/* FOUR MAIN OPTIONS: VERIFY, FILES, SETUP, BUY */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                    {/* 1. VERIFY */}
+                    <button
+                      type="button"
+                      onClick={() => handleOptionClick(mod, 'VERIFY', panelPerms.verify_access)}
+                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        panelPerms.verify_access
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
+                          : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                      }`}
+                      title={panelPerms.verify_access ? 'Verify Panel' : 'Access Locked'}
+                    >
+                      {panelPerms.verify_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
+                      <span>VERIFY</span>
+                    </button>
 
-                {/* Bottom Card Footer: Request Button / State */}
-                <div className="pt-4 mt-3 border-t border-slate-900/90 flex items-center justify-between text-[11px] font-mono-code">
-                  {hasLicense ? (
-                    <span className="text-emerald-400 flex items-center gap-1.5 font-bold">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      AUTHORIZED ACCESS ACTIVE
-                    </span>
-                  ) : (
-                    <span className="text-slate-500 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
-                      REQUIRES ACCESS PASS
-                    </span>
-                  )}
+                    {/* 2. FILES */}
+                    <button
+                      type="button"
+                      onClick={() => handleOptionClick(mod, 'FILES', panelPerms.files_access)}
+                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        panelPerms.files_access
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
+                          : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                      }`}
+                      title={panelPerms.files_access ? 'Panel Files' : 'Access Locked'}
+                    >
+                      {panelPerms.files_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
+                      <span>FILES</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleToggleModule(mod)}
-                    className="text-cyan-400 hover:text-cyan-200 hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>{hasLicense ? 'MANAGE ACCESS' : 'REQUEST ACCESS'}</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
+                    {/* 3. SETUP */}
+                    <button
+                      type="button"
+                      onClick={() => handleOptionClick(mod, 'SETUP', panelPerms.setup_access)}
+                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        panelPerms.setup_access
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/80'
+                          : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                      }`}
+                      title={panelPerms.setup_access ? 'Panel Setup' : 'Access Locked'}
+                    >
+                      {panelPerms.setup_access ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
+                      <span>SETUP</span>
+                    </button>
+
+                    {/* 4. BUY */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cyberAudio.playClick();
+                        setActivePaywallModule(mod);
+                        setIsPaywallOpen(true);
+                      }}
+                      className={`py-2 px-3 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        panelPerms.purchased && panelPerms.payment_status === 'approved'
+                          ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50'
+                          : panelPerms.purchased && panelPerms.payment_status === 'pending'
+                          ? 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                          : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border-cyan-400/30 shadow-[0_0_15px_rgba(0,242,254,0.3)]'
+                      }`}
+                      title="Purchase Panel"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>
+                        {panelPerms.purchased && panelPerms.payment_status === 'approved'
+                          ? 'BOUGHT'
+                          : panelPerms.purchased && panelPerms.payment_status === 'pending'
+                          ? 'PENDING'
+                          : 'BUY'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             );
@@ -447,6 +488,122 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         plans={plans}
         upiQrImage={upiQrImage}
       />
+
+      {/* Locked Access Alert Modal */}
+      {lockedAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-3xl p-6 w-full max-w-sm text-slate-100 font-mono-code text-xs shadow-[0_0_50px_rgba(245,158,11,0.3)]">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-950 border border-amber-500/60 flex items-center justify-center text-amber-400 shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-display font-bold text-white">
+                ACCESS LOCKED: {lockedAlert.type}
+              </h3>
+            </div>
+            <p className="text-amber-200/90 leading-relaxed mb-4">
+              Access to <strong>{lockedAlert.type}</strong> for <strong>{lockedAlert.moduleName}</strong> is currently locked. Purchase this panel and wait for administrator approval to unlock access.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setLockedAlert(null)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300"
+              >
+                CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verify Access Modal */}
+      {activeVerifyModule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="bg-slate-900 border border-emerald-500/50 rounded-3xl p-6 w-full max-w-md text-slate-100 font-mono-code text-xs shadow-[0_0_50px_rgba(16,185,129,0.3)]">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-950 border border-emerald-500/60 flex items-center justify-center text-emerald-400 shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-white">VERIFY: {activeVerifyModule.name}</h3>
+                  <span className="text-[10px] text-emerald-400">STATUS: VERIFIED SECURE & AUTHORIZED</span>
+                </div>
+              </div>
+              <button onClick={() => setActiveVerifyModule(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 mb-4">
+              <div className="flex justify-between"><span className="text-slate-400">Panel ID:</span><span className="text-cyan-300">{activeVerifyModule.id}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Signature:</span><span className="text-emerald-400">SHA-256 VALIDATED</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">License Status:</span><span className="text-emerald-400">ACTIVE & UNLOCKED</span></div>
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => setActiveVerifyModule(null)} className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold">CLOSE</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Files Access Modal */}
+      {activeFilesModule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="bg-slate-900 border border-cyan-500/50 rounded-3xl p-6 w-full max-w-md text-slate-100 font-mono-code text-xs shadow-[0_0_50px_rgba(0,242,254,0.3)]">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500/60 flex items-center justify-center text-cyan-400 shrink-0">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-white">FILES: {activeFilesModule.name}</h3>
+                  <span className="text-[10px] text-cyan-400">SECURE ASSET REPOSITORY</span>
+                </div>
+              </div>
+              <button onClick={() => setActiveFilesModule(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 mb-4">
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800">
+                <span>payload_core.bin</span>
+                <span className="text-cyan-400 font-bold">READY</span>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800">
+                <span>config_auth.json</span>
+                <span className="text-cyan-400 font-bold">READY</span>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => setActiveFilesModule(null)} className="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold">CLOSE</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Setup Access Modal */}
+      {activeSetupModule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="bg-slate-900 border border-cyan-500/50 rounded-3xl p-6 w-full max-w-md text-slate-100 font-mono-code text-xs shadow-[0_0_50px_rgba(0,242,254,0.3)]">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500/60 flex items-center justify-center text-cyan-400 shrink-0">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-white">SETUP: {activeSetupModule.name}</h3>
+                  <span className="text-[10px] text-cyan-400">INITIALIZATION & CONFIGURATION</span>
+                </div>
+              </div>
+              <button onClick={() => setActiveSetupModule(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 mb-4 text-slate-300">
+              <p>1. Ensure system architecture matches v{activeSetupModule.version}.</p>
+              <p>2. Load environmental tokens into secure memory.</p>
+              <p>3. Execute handshake command.</p>
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => setActiveSetupModule(null)} className="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold">CLOSE</button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 };

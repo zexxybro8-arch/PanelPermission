@@ -17,6 +17,18 @@ export interface CyberModule {
   assignedCustomerIds?: string[];
 }
 
+export interface PanelPermissionState {
+  purchased: boolean;
+  payment_status: 'none' | 'pending' | 'approved' | 'rejected';
+  verify_access: boolean;
+  files_access: boolean;
+  setup_access: boolean;
+  payment_ref?: string;
+  payment_note?: string;
+  purchased_at?: string;
+  approved_at?: string;
+}
+
 export interface UserProfile {
   id?: string;
   customer_id?: string;
@@ -35,6 +47,7 @@ export interface UserProfile {
   status?: 'active' | 'blocked';
   expiry_date?: string;
   assigned_modules?: string[];
+  panel_permissions?: Record<string, PanelPermissionState>;
 }
 
 export interface TelemetryLog {
@@ -79,6 +92,7 @@ export interface Customer {
   status: 'active' | 'blocked';
   expiry_date: string;
   assigned_modules: string[];
+  panel_permissions?: Record<string, PanelPermissionState>;
   created_at: string;
   updated_at: string;
 }
@@ -99,6 +113,7 @@ export interface CustomerCreationInput {
   status: 'active' | 'blocked';
   expiry_date: string;
   assigned_modules: string[];
+  panel_permissions?: Record<string, PanelPermissionState>;
 }
 
 export interface CreatedCustomerResult {
@@ -112,6 +127,7 @@ export interface CreatedCustomerResult {
     status: 'active' | 'blocked';
     expiry_date: string;
     assigned_modules: string[];
+    panel_permissions?: Record<string, PanelPermissionState>;
   };
 }
 

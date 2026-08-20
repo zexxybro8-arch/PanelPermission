@@ -4,6 +4,18 @@ import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 
+interface StoredPanelPermission {
+  purchased: boolean;
+  payment_status: 'none' | 'pending' | 'approved' | 'rejected';
+  verify_access: boolean;
+  files_access: boolean;
+  setup_access: boolean;
+  payment_ref?: string;
+  payment_note?: string;
+  purchased_at?: string;
+  approved_at?: string;
+}
+
 interface StoredCustomer {
   id: string;
   customer_id: string;
@@ -14,6 +26,7 @@ interface StoredCustomer {
   status: 'active' | 'blocked';
   expiry_date: string;
   assigned_modules: string[];
+  panel_permissions?: Record<string, StoredPanelPermission>;
   created_at: string;
   updated_at: string;
 }
@@ -219,6 +232,57 @@ async function startServer() {
     return pass;
   }
 
+  // Helper to ensure initialized panel permissions for a customer
+  function getCustomerPanelPermissions(customer: StoredCustomer, panels: StoredPanel[]): Record<string, StoredPanelPermission> {
+    const current = customer.panel_permissions || {};
+    const perms: Record<string, StoredPanelPermission> = {};
+    const assigned = Array.isArray(customer.assigned_modules) ? customer.assigned_modules : [];
+
+    // Ensure all assigned panels have defined permissions (default: all false)
+    assigned.forEach((mId) => {
+      if (current[mId]) {
+        perms[mId] = {
+          purchased: Boolean(current[mId].purchased),
+          payment_status: current[mId].payment_status || (current[mId].purchased ? 'approved' : 'none'),
+          verify_access: Boolean(current[mId].verify_access),
+          files_access: Boolean(current[mId].files_access),
+          setup_access: Boolean(current[mId].setup_access),
+          payment_ref: current[mId].payment_ref || '',
+          payment_note: current[mId].payment_note || '',
+          purchased_at: current[mId].purchased_at,
+          approved_at: current[mId].approved_at,
+        };
+      } else {
+        perms[mId] = {
+          purchased: false,
+          payment_status: 'none',
+          verify_access: false,
+          files_access: false,
+          setup_access: false,
+        };
+      }
+    });
+
+    // Also include any other panels previously modified in customer.panel_permissions
+    Object.keys(current).forEach((mId) => {
+      if (!perms[mId]) {
+        perms[mId] = {
+          purchased: Boolean(current[mId].purchased),
+          payment_status: current[mId].payment_status || (current[mId].purchased ? 'approved' : 'none'),
+          verify_access: Boolean(current[mId].verify_access),
+          files_access: Boolean(current[mId].files_access),
+          setup_access: Boolean(current[mId].setup_access),
+          payment_ref: current[mId].payment_ref || '',
+          payment_note: current[mId].payment_note || '',
+          purchased_at: current[mId].purchased_at,
+          approved_at: current[mId].approved_at,
+        };
+      }
+    });
+
+    return perms;
+  }
+
   // ==========================================
   // AUTHENTICATION API ROUTES
   // ==========================================
@@ -302,6 +366,7 @@ async function startServer() {
 
     // Successful login - return session token and customer's isolated data
     const token = `cust_${customer.id}_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+    const panelPermissions = getCustomerPanelPermissions(customer, db.modules);
 
     return res.json({
       success: true,
@@ -316,6 +381,7 @@ async function startServer() {
         status: customer.status,
         expiry_date: customer.expiry_date,
         assigned_modules: customer.assigned_modules || [],
+        panel_permissions: panelPermissions,
         role: 'user',
         clearanceLevel: 3,
       },
@@ -403,6 +469,8 @@ async function startServer() {
       });
     }
 
+    const panelPermissions = getCustomerPanelPermissions(customer, db.modules);
+
     // Return ONLY their own customer profile
     return res.json({
       success: true,
@@ -415,6 +483,7 @@ async function startServer() {
         status: customer.status,
         expiry_date: customer.expiry_date,
         assigned_modules: customer.assigned_modules || [],
+        panel_permissions: panelPermissions,
         role: 'user',
         clearanceLevel: 3,
       },
@@ -460,6 +529,7 @@ async function startServer() {
       status: c.status,
       expiry_date: c.expiry_date,
       assigned_modules: c.assigned_modules || [],
+      panel_permissions: getCustomerPanelPermissions(c, db.modules),
       created_at: c.created_at,
       updated_at: c.updated_at,
     }));
@@ -484,6 +554,7 @@ async function startServer() {
       status,
       expiry_date,
       assigned_modules,
+      panel_permissions,
     } = req.body;
 
     const targetCustomerId = (customer_id || generateUniqueCustomerId()).toString().trim().toUpperCase();
@@ -510,6 +581,22 @@ async function startServer() {
       return res.status(400).json({ success: false, message: `Username "${targetUsername}" already exists.` });
     }
 
+    // Initialize per-panel permissions (all default false)
+    const initialPerms: Record<string, StoredPanelPermission> = {};
+    targetModules.forEach(mId => {
+      if (panel_permissions && panel_permissions[mId]) {
+        initialPerms[mId] = panel_permissions[mId];
+      } else {
+        initialPerms[mId] = {
+          purchased: false,
+          payment_status: 'none',
+          verify_access: false,
+          files_access: false,
+          setup_access: false,
+        };
+      }
+    });
+
     const now = new Date().toISOString();
     const newCustomer: StoredCustomer = {
       id: `cust_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
@@ -521,6 +608,7 @@ async function startServer() {
       status: targetStatus,
       expiry_date: targetExpiry,
       assigned_modules: targetModules,
+      panel_permissions: initialPerms,
       created_at: now,
       updated_at: now,
     };
@@ -540,6 +628,7 @@ async function startServer() {
         status: newCustomer.status,
         expiry_date: newCustomer.expiry_date,
         assigned_modules: newCustomer.assigned_modules,
+        panel_permissions: getCustomerPanelPermissions(newCustomer, db.modules),
         created_at: newCustomer.created_at,
         updated_at: newCustomer.updated_at,
       },
@@ -552,6 +641,7 @@ async function startServer() {
         status: newCustomer.status,
         expiry_date: newCustomer.expiry_date,
         assigned_modules: newCustomer.assigned_modules,
+        panel_permissions: getCustomerPanelPermissions(newCustomer, db.modules),
       },
     });
   });
@@ -574,6 +664,7 @@ async function startServer() {
       status,
       expiry_date,
       assigned_modules,
+      panel_permissions,
     } = req.body;
 
     if (username && username.trim().toLowerCase() !== current.username.toLowerCase()) {
@@ -591,6 +682,12 @@ async function startServer() {
     if (status) current.status = status === 'blocked' ? 'blocked' : 'active';
     if (expiry_date) current.expiry_date = expiry_date;
     if (Array.isArray(assigned_modules)) current.assigned_modules = assigned_modules;
+    if (panel_permissions && typeof panel_permissions === 'object') {
+      current.panel_permissions = {
+        ...(current.panel_permissions || {}),
+        ...panel_permissions,
+      };
+    }
     current.updated_at = new Date().toISOString();
 
     db.customers[customerIndex] = current;
@@ -608,6 +705,7 @@ async function startServer() {
         status: current.status,
         expiry_date: current.expiry_date,
         assigned_modules: current.assigned_modules,
+        panel_permissions: getCustomerPanelPermissions(current, db.modules),
         created_at: current.created_at,
         updated_at: current.updated_at,
       },
@@ -703,6 +801,191 @@ async function startServer() {
     return res.json({
       success: true,
       message: "Customer permanently deleted.",
+    });
+  });
+
+  // ==========================================
+  // CUSTOMER & ADMIN PANEL PERMISSION ACTIONS
+  // ==========================================
+
+  // Customer Buys a Panel (initiates buy flow with payment confirmation)
+  app.post("/api/customer/buy-panel", (req, res) => {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    const { customer_id, panel_id, transaction_ref, payment_note } = req.body;
+
+    if (!panel_id) {
+      return res.status(400).json({ success: false, message: "Panel ID is required." });
+    }
+
+    db = loadDatabase();
+    let customer: StoredCustomer | undefined;
+
+    if (token && token.startsWith("cust_")) {
+      const match = token.match(/^cust_([^_]+)_/);
+      if (match) {
+        customer = db.customers.find(c => c.id === match[1] || c.customer_id === match[1]);
+      }
+    }
+
+    if (!customer && customer_id) {
+      customer = db.customers.find(
+        c => c.id === customer_id || c.customer_id.toUpperCase() === customer_id.toUpperCase() || c.username.toLowerCase() === customer_id.toLowerCase()
+      );
+    }
+
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer account not found." });
+    }
+
+    if (!customer.panel_permissions) {
+      customer.panel_permissions = {};
+    }
+
+    const now = new Date().toISOString();
+    customer.panel_permissions[panel_id] = {
+      purchased: true,
+      payment_status: 'pending',
+      verify_access: false, // Locked until admin explicitly approves
+      files_access: false,  // Locked until admin explicitly approves
+      setup_access: false,  // Locked until admin explicitly approves
+      payment_ref: (transaction_ref || '').toString().trim(),
+      payment_note: (payment_note || '').toString().trim(),
+      purchased_at: now,
+    };
+
+    // Ensure panel is in customer's assigned modules
+    if (!customer.assigned_modules.includes(panel_id)) {
+      customer.assigned_modules.push(panel_id);
+    }
+
+    customer.updated_at = now;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: "PAYMENT RECEIVED // AWAITING ADMIN APPROVAL",
+      panel_id,
+      permission: customer.panel_permissions[panel_id],
+      panel_permissions: getCustomerPanelPermissions(customer, db.modules),
+    });
+  });
+
+  // Admin Update Specific Panel Permission for a Customer
+  app.post("/api/admin/customers/:id/panel-permissions", (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const { panel_id, verify_access, files_access, setup_access, payment_status, purchased } = req.body;
+
+    if (!panel_id) {
+      return res.status(400).json({ success: false, message: "panel_id is required." });
+    }
+
+    const customer = db.customers.find(c => c.id === id || c.customer_id === id);
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found." });
+    }
+
+    if (!customer.panel_permissions) {
+      customer.panel_permissions = {};
+    }
+
+    const currentPerm = customer.panel_permissions[panel_id] || {
+      purchased: false,
+      payment_status: 'none',
+      verify_access: false,
+      files_access: false,
+      setup_access: false,
+    };
+
+    if (typeof verify_access !== 'undefined') currentPerm.verify_access = Boolean(verify_access);
+    if (typeof files_access !== 'undefined') currentPerm.files_access = Boolean(files_access);
+    if (typeof setup_access !== 'undefined') currentPerm.setup_access = Boolean(setup_access);
+    if (typeof payment_status !== 'undefined') currentPerm.payment_status = payment_status;
+    if (typeof purchased !== 'undefined') currentPerm.purchased = Boolean(purchased);
+
+    if (payment_status === 'approved') {
+      currentPerm.purchased = true;
+      currentPerm.approved_at = new Date().toISOString();
+    } else if (payment_status === 'rejected') {
+      currentPerm.verify_access = false;
+      currentPerm.files_access = false;
+      currentPerm.setup_access = false;
+    }
+
+    customer.panel_permissions[panel_id] = currentPerm;
+
+    // Ensure panel is in assigned_modules if approved
+    if (currentPerm.purchased && !customer.assigned_modules.includes(panel_id)) {
+      customer.assigned_modules.push(panel_id);
+    }
+
+    customer.updated_at = new Date().toISOString();
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: `Permissions updated for panel ${panel_id}.`,
+      panel_permissions: getCustomerPanelPermissions(customer, db.modules),
+    });
+  });
+
+  // Admin Bulk Lock / Unlock All Panels for a Customer
+  app.post("/api/admin/customers/:id/bulk-panel-permissions", (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const { action } = req.body; // 'unlock_all' | 'lock_all'
+
+    const customer = db.customers.find(c => c.id === id || c.customer_id === id);
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Customer not found." });
+    }
+
+    if (!customer.panel_permissions) {
+      customer.panel_permissions = {};
+    }
+
+    const assigned = Array.isArray(customer.assigned_modules) ? customer.assigned_modules : [];
+    const now = new Date().toISOString();
+
+    if (action === 'unlock_all') {
+      assigned.forEach(mId => {
+        customer.panel_permissions![mId] = {
+          purchased: true,
+          payment_status: 'approved',
+          verify_access: true,
+          files_access: true,
+          setup_access: true,
+          approved_at: now,
+          payment_ref: customer.panel_permissions![mId]?.payment_ref || 'ADMIN-APPROVED',
+        };
+      });
+    } else {
+      // lock_all
+      assigned.forEach(mId => {
+        const existing = customer.panel_permissions![mId] || {
+          purchased: false,
+          payment_status: 'none',
+          verify_access: false,
+          files_access: false,
+          setup_access: false,
+        };
+        customer.panel_permissions![mId] = {
+          ...existing,
+          verify_access: false,
+          files_access: false,
+          setup_access: false,
+        };
+      });
+    }
+
+    customer.updated_at = now;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: action === 'unlock_all' ? 'All panels unlocked successfully.' : 'All panels locked successfully.',
+      panel_permissions: getCustomerPanelPermissions(customer, db.modules),
     });
   });
 
@@ -983,6 +1266,17 @@ async function startServer() {
         imageUrl: m.imageUrl || '',
         price: m.price || 120,
       })),
+      panel_permissions: targetCustomer ? getCustomerPanelPermissions(targetCustomer, db.modules) : {},
+      customer: targetCustomer ? {
+        id: targetCustomer.id,
+        customer_id: targetCustomer.customer_id,
+        username: targetCustomer.username,
+        display_name: targetCustomer.display_name,
+        price: targetCustomer.price,
+        status: targetCustomer.status,
+        expiry_date: targetCustomer.expiry_date,
+        assigned_modules: targetCustomer.assigned_modules || [],
+      } : null,
       plans: [
         { id: 'plan-15', name: '15 DAYS ACCESS', durationDays: 15, defaultPrice: targetCustomer?.price || 120, userPrice: targetCustomer?.price || 120, status: 'active', badge: 'STANDARD', description: '15 days full tactical access pass', hasCustomPrice: true },
         { id: 'plan-30', name: '30 DAYS ACCESS', durationDays: 30, defaultPrice: (targetCustomer?.price || 120) * 1.5, userPrice: (targetCustomer?.price || 120) * 1.5, status: 'active', badge: 'RECOMMENDED', description: '30 days extended access pass', hasCustomPrice: true },

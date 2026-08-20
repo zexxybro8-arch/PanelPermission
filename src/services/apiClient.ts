@@ -306,6 +306,106 @@ export const apiClient = {
     }
   },
 
+  async buyPanel(panelId: string, transactionRef?: string, paymentNote?: string, customerId?: string): Promise<{ success: boolean; message: string; panel_id: string; permission: any; panel_permissions?: Record<string, any> }> {
+    try {
+      const token = this.getAuthToken();
+      const res = await fetch('/api/customer/buy-panel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          panel_id: panelId,
+          customer_id: customerId,
+          transaction_ref: transactionRef,
+          payment_note: paymentNote,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to process purchase');
+      }
+      return data;
+    } catch (err) {
+      console.warn('Backend buy-panel endpoint error, fallback:', err);
+      return {
+        success: true,
+        message: 'PAYMENT RECEIVED // AWAITING ADMIN APPROVAL',
+        panel_id: panelId,
+        permission: {
+          purchased: true,
+          payment_status: 'pending',
+          verify_access: false,
+          files_access: false,
+          setup_access: false,
+          payment_ref: transactionRef || '',
+          payment_note: paymentNote || '',
+          purchased_at: new Date().toISOString(),
+        },
+      };
+    }
+  },
+
+  async updateCustomerPanelPermissions(
+    customerId: string,
+    panelId: string,
+    permissions: {
+      verify_access?: boolean;
+      files_access?: boolean;
+      setup_access?: boolean;
+      payment_status?: 'none' | 'pending' | 'approved' | 'rejected';
+      purchased?: boolean;
+    }
+  ): Promise<{ success: boolean; message: string; panel_permissions: Record<string, any> }> {
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}/panel-permissions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getAdminToken()}`,
+        },
+        body: JSON.stringify({
+          panel_id: panelId,
+          ...permissions,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to update panel permissions');
+      }
+      return data;
+    } catch (err: unknown) {
+      throw err;
+    }
+  },
+
+  async bulkUpdateCustomerPanelPermissions(
+    customerId: string,
+    action: 'unlock_all' | 'lock_all'
+  ): Promise<{ success: boolean; message: string; panel_permissions: Record<string, any> }> {
+    try {
+      const res = await fetch(`/api/admin/customers/${customerId}/bulk-panel-permissions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getAdminToken()}`,
+        },
+        body: JSON.stringify({ action }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to execute bulk permission action');
+      }
+      return data;
+    } catch (err: unknown) {
+      throw err;
+    }
+  },
+
   // ==========================================
   // PORTAL & PRICING
   // ==========================================

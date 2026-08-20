@@ -94,6 +94,9 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
   const [modulesModalCustomer, setModulesModalCustomer] = useState<Customer | null>(null);
   const [selectedModulesList, setSelectedModulesList] = useState<string[]>([]);
 
+  // Panel Permissions Management Modal State
+  const [permissionsModalCustomer, setPermissionsModalCustomer] = useState<Customer | null>(null);
+
   // Confirmation Modals (Block, Delete)
   const [confirmBlockCustomer, setConfirmBlockCustomer] = useState<Customer | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<Customer | null>(null);
@@ -408,6 +411,46 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
       await fetchCustomerData();
     } catch (err: unknown) {
       showToast(extractErrorMessage(err, 'Failed to update module permissions.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleOpenPermissionsModal = (c: Customer) => {
+    setPermissionsModalCustomer(c);
+  };
+
+  const handleUpdatePanelPerm = async (customerId: string, panelId: string, perms: any) => {
+    setActionLoading(`perm-${panelId}`);
+    try {
+      const res = await apiClient.updateCustomerPanelPermissions(customerId, panelId, perms);
+      showToast('Panel permissions updated successfully.');
+      const updatedPerms = res.panel_permissions;
+      setCustomers(prev => prev.map(c => c.id === customerId || c.customer_id === customerId ? { ...c, panel_permissions: updatedPerms } : c));
+      if (permissionsModalCustomer && (permissionsModalCustomer.id === customerId || permissionsModalCustomer.customer_id === customerId)) {
+        setPermissionsModalCustomer(prev => prev ? { ...prev, panel_permissions: updatedPerms } : null);
+      }
+      if (onRefreshParent) onRefreshParent();
+    } catch (err: unknown) {
+      showToast(extractErrorMessage(err, 'Failed to update panel permissions.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleBulkPanelPerm = async (customerId: string, action: 'unlock_all' | 'lock_all') => {
+    setActionLoading(`bulk-${action}`);
+    try {
+      const res = await apiClient.bulkUpdateCustomerPanelPermissions(customerId, action);
+      showToast(action === 'unlock_all' ? 'All panels unlocked successfully.' : 'All panels locked successfully.');
+      const updatedPerms = res.panel_permissions;
+      setCustomers(prev => prev.map(c => c.id === customerId || c.customer_id === customerId ? { ...c, panel_permissions: updatedPerms } : c));
+      if (permissionsModalCustomer && (permissionsModalCustomer.id === customerId || permissionsModalCustomer.customer_id === customerId)) {
+        setPermissionsModalCustomer(prev => prev ? { ...prev, panel_permissions: updatedPerms } : null);
+      }
+      if (onRefreshParent) onRefreshParent();
+    } catch (err: unknown) {
+      showToast(extractErrorMessage(err, 'Failed bulk permission action.'));
     } finally {
       setActionLoading(null);
     }
@@ -804,6 +847,15 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                               title="Edit Customer"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Permissions Button */}
+                            <button
+                              onClick={() => handleOpenPermissionsModal(cust)}
+                              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-emerald-950 hover:text-emerald-300 text-slate-400 border border-slate-700/60 transition-colors"
+                              title="Manage Panel Permissions"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Reset Password Button */}
@@ -1887,6 +1939,209 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold"
               >
                 DELETE PERMANENTLY
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 10. PANEL PERMISSIONS MANAGEMENT MODAL */}
+      {/* ======================================================== */}
+      {permissionsModalCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 w-full max-w-2xl text-slate-100 font-mono-code text-xs shadow-[0_0_60px_rgba(16,185,129,0.2)] my-8">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <div>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/40">
+                  PANEL PERMISSIONS & ACCESS CONTROL
+                </span>
+                <h3 className="text-lg font-display font-bold text-white mt-1">
+                  CUSTOMER: {permissionsModalCustomer.customer_id} ({permissionsModalCustomer.username})
+                </h3>
+              </div>
+              <button
+                onClick={() => setPermissionsModalCustomer(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Bulk Actions */}
+            <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800 mb-4">
+              <span className="text-slate-400 text-[11px]">BULK ACCESS CONTROLS:</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleBulkPanelPerm(permissionsModalCustomer.id || permissionsModalCustomer.customer_id, 'unlock_all')}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1.5"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>UNLOCK ALL</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBulkPanelPerm(permissionsModalCustomer.id || permissionsModalCustomer.customer_id, 'lock_all')}
+                  className="px-3 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/40 font-bold flex items-center gap-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>LOCK ALL</span>
+                </button>
+              </div>
+            </div>
+
+            {/* List of Panels */}
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {modules.map((mod) => {
+                const panelPerms = (permissionsModalCustomer.panel_permissions && permissionsModalCustomer.panel_permissions[mod.id]) || {
+                  purchased: false,
+                  payment_status: 'none',
+                  verify_access: false,
+                  files_access: false,
+                  setup_access: false,
+                  payment_ref: '',
+                };
+
+                const isAssigned = Array.isArray(permissionsModalCustomer.assigned_modules) && permissionsModalCustomer.assigned_modules.includes(mod.id);
+
+                return (
+                  <div key={mod.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white text-sm">{mod.name}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">{mod.tag}</span>
+                          {isAssigned && (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30">ASSIGNED</span>
+                          )}
+                        </div>
+                        {panelPerms.payment_ref && (
+                          <div className="text-[11px] text-amber-300 mt-1">
+                            Txn Ref: <strong className="text-white">{panelPerms.payment_ref}</strong> {panelPerms.payment_note ? `(${panelPerms.payment_note})` : ''}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Purchase Status Badge */}
+                      <div>
+                        {panelPerms.purchased ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40">
+                            PURCHASED ({panelPerms.payment_status.toUpperCase()})
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                            NOT PURCHASED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Permission Switches & Approvals */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
+                      {/* Purchase / Approval Action */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold block">PURCHASE STATUS</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePanelPerm(permissionsModalCustomer.id || permissionsModalCustomer.customer_id, mod.id, {
+                              purchased: true,
+                              payment_status: 'approved',
+                            })}
+                            className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                              panelPerms.purchased && panelPerms.payment_status === 'approved'
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                            }`}
+                          >
+                            APPROVE
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdatePanelPerm(permissionsModalCustomer.id || permissionsModalCustomer.customer_id, mod.id, {
+                              purchased: false,
+                              payment_status: 'rejected',
+                            })}
+                            className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                              panelPerms.payment_status === 'rejected'
+                                ? 'bg-rose-600 text-white border-rose-500'
+                                : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                            }`}
+                          >
+                            REJECT
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* VERIFY ACCESS */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold block">VERIFY ACCESS</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePanelPerm(permissionsModalCustomer.id || permissionsModalCustomer.customer_id, mod.id, {
+                            verify_access: !panelPerms.verify_access,
+                          })}
+                          className={`w-full py-1.5 rounded-lg text-[11px] font-bold border flex items-center justify-center gap-1.5 transition-colors ${
+                            panelPerms.verify_access
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40'
+                              : 'bg-slate-900 text-slate-500 border-slate-700'
+                          }`}
+                        >
+                          {panelPerms.verify_access ? <Unlock className="w-3 h-3 text-emerald-400" /> : <Lock className="w-3 h-3" />}
+                          <span>VERIFY: {panelPerms.verify_access ? 'ON (UNLOCKED)' : 'OFF (LOCKED)'}</span>
+                        </button>
+                      </div>
+
+                      {/* FILES ACCESS */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold block">FILES ACCESS</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePanelPerm(permissionsModalCustomer.id || permissionsModalCustomer.customer_id, mod.id, {
+                            files_access: !panelPerms.files_access,
+                          })}
+                          className={`w-full py-1.5 rounded-lg text-[11px] font-bold border flex items-center justify-center gap-1.5 transition-colors ${
+                            panelPerms.files_access
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40'
+                              : 'bg-slate-900 text-slate-500 border-slate-700'
+                          }`}
+                        >
+                          {panelPerms.files_access ? <Unlock className="w-3 h-3 text-emerald-400" /> : <Lock className="w-3 h-3" />}
+                          <span>FILES: {panelPerms.files_access ? 'ON (UNLOCKED)' : 'OFF (LOCKED)'}</span>
+                        </button>
+                      </div>
+
+                      {/* SETUP ACCESS */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold block">SETUP ACCESS</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePanelPerm(permissionsModalCustomer.id || permissionsModalCustomer.customer_id, mod.id, {
+                            setup_access: !panelPerms.setup_access,
+                          })}
+                          className={`w-full py-1.5 rounded-lg text-[11px] font-bold border flex items-center justify-center gap-1.5 transition-colors ${
+                            panelPerms.setup_access
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40'
+                              : 'bg-slate-900 text-slate-500 border-slate-700'
+                          }`}
+                        >
+                          {panelPerms.setup_access ? <Unlock className="w-3 h-3 text-emerald-400" /> : <Lock className="w-3 h-3" />}
+                          <span>SETUP: {panelPerms.setup_access ? 'ON (UNLOCKED)' : 'OFF (LOCKED)'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end pt-4 border-t border-slate-800 mt-4">
+              <button
+                onClick={() => setPermissionsModalCustomer(null)}
+                className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold"
+              >
+                DONE
               </button>
             </div>
           </div>
