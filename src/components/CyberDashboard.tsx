@@ -376,9 +376,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                         ) : (
                           <IconComponent className="w-6 h-6" />
                         )}
-                      </div>
-
-                      <div>
+                      </div>                       <div>
                         <div className="flex items-center gap-2">
                           <h2 className="font-display font-bold text-lg text-white tracking-wider group-hover:text-cyan-200 transition-colors">
                             {mod.name}
@@ -398,8 +396,15 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                     </div>
                   </div>
 
+                  {/* Restored Panel Description */}
+                  {mod.description && (
+                    <p className="text-xs text-slate-300 font-mono-code leading-relaxed line-clamp-3 mt-1.5">
+                      {mod.description}
+                    </p>
+                  )}
+
                   {/* FOUR MAIN OPTIONS: VERIFY, FILES, SETUP, BUY */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
                     {/* 1. VERIFY */}
                     <button
                       type="button"
@@ -445,7 +450,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                       <span>SETUP</span>
                     </button>
 
-                    {/* 4. BUY */}
+                    {/* 4. BUY (Strictly BUY / BUY AGAIN, never BOUGHT) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -465,7 +470,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                       <Zap className="w-3.5 h-3.5" />
                       <span>
                         {panelPerms.purchased && panelPerms.payment_status === 'approved'
-                          ? 'BOUGHT'
+                          ? 'BUY AGAIN'
                           : panelPerms.purchased && panelPerms.payment_status === 'pending'
                           ? 'PENDING'
                           : 'BUY'}
@@ -498,11 +503,11 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                 <Lock className="w-5 h-5" />
               </div>
               <h3 className="text-base font-display font-bold text-white">
-                ACCESS LOCKED: {lockedAlert.type}
+                ACCESS LOCKED
               </h3>
             </div>
             <p className="text-amber-200/90 leading-relaxed mb-4">
-              Access to <strong>{lockedAlert.type}</strong> for <strong>{lockedAlert.moduleName}</strong> is currently locked. Purchase this panel and wait for administrator approval to unlock access.
+              Please contact the administrator or wait for permission.
             </p>
             <div className="flex items-center justify-end gap-2">
               <button

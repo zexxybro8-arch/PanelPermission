@@ -737,27 +737,39 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-800 bg-slate-950/70 text-[11px] font-mono-code text-slate-400">
-                    <th className="py-3.5 px-4">CUSTOMER ID</th>
-                    <th className="py-3.5 px-4">USERNAME</th>
-                    <th className="py-3.5 px-4">PRICE</th>
-                    <th className="py-3.5 px-4">STATUS</th>
-                    <th className="py-3.5 px-4">EXPIRY</th>
-                    <th className="py-3.5 px-4">MODULES</th>
-                    <th className="py-3.5 px-4 text-right">ACTIONS</th>
+                    <th className="py-3.5 px-3">CUSTOMER ID</th>
+                    <th className="py-3.5 px-3">USERNAME</th>
+                    <th className="py-3.5 px-3">STATUS</th>
+                    <th className="py-3.5 px-3">PRICE</th>
+                    <th className="py-3.5 px-3">EXPIRY</th>
+                    <th className="py-3.5 px-3">PAYMENT</th>
+                    <th className="py-3.5 px-3">VERIFY</th>
+                    <th className="py-3.5 px-3">FILES</th>
+                    <th className="py-3.5 px-3">SETUP</th>
+                    <th className="py-3.5 px-3 text-right">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-mono-code text-xs">
                   {sortedCustomers.map((cust) => {
                     const badgeInfo = getExpiryBadgeInfo(cust.expiry_date, cust.status);
+                    
+                    // Summarize payment and access permissions across panels
+                    const panelPermsList = cust.panel_permissions ? Object.values(cust.panel_permissions) : [];
+                    const hasApproved = panelPermsList.some(p => p.payment_status === 'approved' || p.purchased);
+                    const hasPending = panelPermsList.some(p => p.payment_status === 'pending');
+                    const hasVerify = panelPermsList.some(p => p.verify_access);
+                    const hasFiles = panelPermsList.some(p => p.files_access);
+                    const hasSetup = panelPermsList.some(p => p.setup_access);
+
                     return (
                       <tr
                         key={cust.id}
                         className="hover:bg-slate-800/30 transition-colors group"
                       >
                         {/* Customer ID */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30 text-[11px]">
                               {cust.customer_id}
                             </span>
                             <button
@@ -765,13 +777,13 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                               className="text-slate-500 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"
                               title="Copy Customer ID"
                             >
-                              <Copy className="w-3.5 h-3.5" />
+                              <Copy className="w-3 h-3" />
                             </button>
                           </div>
                         </td>
 
                         {/* Username & Name */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-3">
                           <div>
                             <span className="font-bold text-slate-100">{cust.username}</span>
                             {cust.display_name && (
@@ -782,11 +794,26 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                           </div>
                         </td>
 
+                        {/* Status */}
+                        <td className="py-3.5 px-3">
+                          {cust.status === 'active' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              ACTIVE
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950 text-rose-400 border border-rose-500/30">
+                              <Lock className="w-2.5 h-2.5" />
+                              BLOCKED
+                            </span>
+                          )}
+                        </td>
+
                         {/* Price */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-3">
                           <button
                             onClick={() => handleOpenPriceModal(cust)}
-                            className="inline-flex items-center gap-1 text-cyan-300 font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-800 hover:border-cyan-500/40 transition-colors"
+                            className="inline-flex items-center gap-1 text-cyan-300 font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-800 hover:border-cyan-500/40 transition-colors text-[11px]"
                             title="Click to edit price"
                           >
                             <span>₹{cust.price}</span>
@@ -794,23 +821,8 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                           </button>
                         </td>
 
-                        {/* Status */}
-                        <td className="py-3.5 px-4">
-                          {cust.status === 'active' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              ACTIVE
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-950 text-rose-400 border border-rose-500/30">
-                              <Lock className="w-2.5 h-2.5" />
-                              BLOCKED
-                            </span>
-                          )}
-                        </td>
-
                         {/* Expiry */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-3">
                           <button
                             onClick={() => handleOpenExpiryModal(cust)}
                             className="text-left group/exp cursor-pointer"
@@ -825,21 +837,47 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                           </button>
                         </td>
 
-                        {/* Modules */}
-                        <td className="py-3.5 px-4">
-                          <button
-                            onClick={() => handleOpenModulesModal(cust)}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-950 border border-slate-800 hover:border-cyan-500/40 text-[11px] text-slate-300 cursor-pointer"
-                            title="Manage module access"
-                          >
-                            <Boxes className="w-3 h-3 text-cyan-400" />
-                            <span>{cust.assigned_modules?.length || 0} Modules</span>
-                          </button>
+                        {/* Payment Status */}
+                        <td className="py-3.5 px-3">
+                          {hasApproved ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40">
+                              APPROVED
+                            </span>
+                          ) : hasPending ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-500/40">
+                              PENDING
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">
+                              NONE
+                            </span>
+                          )}
+                        </td>
+
+                        {/* VERIFY Access Summary */}
+                        <td className="py-3.5 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${hasVerify ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}>
+                            {hasVerify ? 'ON' : 'OFF'}
+                          </span>
+                        </td>
+
+                        {/* FILES Access Summary */}
+                        <td className="py-3.5 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${hasFiles ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}>
+                            {hasFiles ? 'ON' : 'OFF'}
+                          </span>
+                        </td>
+
+                        {/* SETUP Access Summary */}
+                        <td className="py-3.5 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${hasSetup ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}>
+                            {hasSetup ? 'ON' : 'OFF'}
+                          </span>
                         </td>
 
                         {/* Actions */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                        <td className="py-3.5 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
                             {/* Edit Button */}
                             <button
                               onClick={() => handleOpenEditModal(cust)}
