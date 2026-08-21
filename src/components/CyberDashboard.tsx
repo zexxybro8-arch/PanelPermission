@@ -75,9 +75,10 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   };
 
   // Load live portal catalogue and personalized pricing from local store / server
-  const loadPortalConfig = async () => {
+  const loadPortalConfig = async (currentPanelId?: string) => {
     try {
-      const config = await apiClient.getPortalConfig(user.id || user.customer_id || user.username);
+      const targetPanelId = currentPanelId || activePaywallModule?.id;
+      const config = await apiClient.getPortalConfig(user.id || user.customer_id || user.username, targetPanelId);
       setModules(config.modules || []);
       setPlans(config.plans || []);
       setUserLicenses(config.userLicenses || []);
@@ -98,12 +99,12 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   };
 
   useEffect(() => {
-    loadPortalConfig();
+    loadPortalConfig(activePaywallModule?.id);
     const unsubscribe = appStore.subscribe(() => {
-      loadPortalConfig();
+      loadPortalConfig(activePaywallModule?.id);
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user, activePaywallModule]);
 
   const copyToClipboard = async (text: string, label: string) => {
     try {

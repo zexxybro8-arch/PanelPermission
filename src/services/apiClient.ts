@@ -118,8 +118,20 @@ export const apiClient = {
   // ==========================================
   // PORTAL & PRICING
   // ==========================================
-  async getPortalConfig(userId?: string): Promise<{ modules: CyberModule[]; plans: AdminRuntimePlan[]; userLicenses: AdminLicense[]; upiQrImage: string; settings: SystemSettingsData; panel_permissions?: Record<string, any>; customer?: any }> {
-    return appStore.getPortalConfig(userId);
+  async getPortalConfig(userId?: string, panelId?: string): Promise<{ modules: CyberModule[]; plans: AdminRuntimePlan[]; userLicenses: AdminLicense[]; upiQrImage: string; settings: SystemSettingsData; panel_permissions?: Record<string, any>; customer?: any }> {
+    return appStore.getPortalConfig(userId, panelId);
+  },
+
+  async savePanelPricing(panelId: string, pricing: any): Promise<void> {
+    return appStore.savePanelPricing(panelId, pricing);
+  },
+
+  async saveCustomerPricing(customerId: string, pricing: any): Promise<void> {
+    return appStore.saveCustomerPricing(customerId, pricing);
+  },
+
+  getEffectivePrice(customerId: string, panelId: string, durationKey: '15Days' | '20Days' | '30Days' | 'permanent'): number {
+    return appStore.getEffectivePrice(customerId, panelId, durationKey);
   },
 
   async createOrder(userId: string, moduleId: string, planId: string, customPlan?: { planName: string; finalPrice: number; durationDays: number }): Promise<{ order: AdminOrder; upiQrImageUrl: string }> {

@@ -9,6 +9,7 @@ import {
 import { Customer, CustomerStats, CyberModule, CustomerCreationInput } from '../../types';
 import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
+import { appStore } from '../../store/appStore';
 
 interface AdminCustomerManagementTabProps {
   onRefreshParent?: () => void;
@@ -104,6 +105,36 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
   // Confirmation Modals (Block, Delete)
   const [confirmBlockCustomer, setConfirmBlockCustomer] = useState<Customer | null>(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<Customer | null>(null);
+
+  // Customer-specific pricing overrides state
+  const [custPricingModalCustomer, setCustPricingModalCustomer] = useState<Customer | null>(null);
+  const [panelOverwrites, setPanelOverwrites] = useState<Record<string, { '15Days'?: number, '20Days'?: number, '30Days'?: number, 'permanent'?: number }>>({});
+
+  useEffect(() => {
+    if (custPricingModalCustomer) {
+      const saved = appStore.state.customerPricing?.[custPricingModalCustomer.id] || {};
+      setPanelOverwrites(saved);
+    }
+  }, [custPricingModalCustomer]);
+
+  const handleSaveCustomerPricingOverwrites = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!custPricingModalCustomer) return;
+    setActionLoading(`save-cust-pricing-${custPricingModalCustomer.id}`);
+    try {
+      await apiClient.saveCustomerPricing(custPricingModalCustomer.id, panelOverwrites);
+      showToast('Customer custom pricing overrides saved successfully');
+      setCustPricingModalCustomer(null);
+    } catch (err) {
+      showToast('Failed to save custom customer pricing');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleClearAllOverrides = () => {
+    setPanelOverwrites({});
+  };
 
   // Toast / Copy Feedback State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -1217,6 +1248,15 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
 
+                            {/* Custom Pricing Button */}
+                            <button
+                              onClick={() => setCustPricingModalCustomer(cust)}
+                              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-violet-950 hover:text-violet-300 text-slate-400 border border-slate-700/60 transition-colors"
+                              title="Manage Custom Pricing Overrides"
+                            >
+                              <DollarSign className="w-3.5 h-3.5" />
+                            </button>
+
                             {/* Permissions Button */}
                             <button
                               onClick={() => handleOpenPermissionsModal(cust)}
@@ -1336,6 +1376,14 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                       >
                         <Edit3 className="w-3 h-3" />
                         <span>EDIT</span>
+                      </button>
+                      <button
+                        onClick={() => setCustPricingModalCustomer(cust)}
+                        className="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-violet-950 text-violet-300 text-xs font-mono-code flex items-center justify-center gap-1"
+                        title="Manage Pricing Overrides"
+                      >
+                        <DollarSign className="w-3 h-3" />
+                        <span>PRICING</span>
                       </button>
                       <button
                         onClick={() => handleOpenResetModal(cust)}
@@ -2545,6 +2593,198 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                 SAVE PERMISSIONS
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MANAGE CUSTOMER CUSTOM PANEL PRICING OVERRIDES MODAL */}
+      {/* ======================================================== */}
+      {custPricingModalCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-fade-in">
+          <div 
+            className="w-full max-w-2xl rounded-3xl border border-violet-500/30 shadow-[0_0_50px_rgba(139,92,246,0.2)] bg-slate-950 p-6 sm:p-7 space-y-5 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-400">
+                  <DollarSign className="w-4 h-4 text-violet-400" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-sm text-white tracking-wider uppercase">
+                    CUSTOM PRICING OVERRIDES
+                  </h3>
+                  <span className="text-[10px] font-mono-code text-slate-400">
+                    Customer: {custPricingModalCustomer.customer_id} ({custPricingModalCustomer.username})
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setCustPricingModalCustomer(null)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs font-mono-code text-slate-400">
+              Define custom price overrides for this customer. Leaving a field blank will automatically fall back to the global panel pricing defaults.
+            </p>
+
+            <form onSubmit={handleSaveCustomerPricingOverwrites} className="space-y-4">
+              <div className="space-y-3 max-h-[45dvh] overflow-y-auto pr-1">
+                {modules.map((mod) => {
+                  const globalPricing = appStore.state.panelPricing?.[mod.id] || {};
+                  const base = mod.price || 120;
+                  const g15 = globalPricing['15Days'] || base;
+                  const g20 = globalPricing['20Days'] || Math.round(base * 1.15);
+                  const g30 = globalPricing['30Days'] || Math.round(base * 1.25);
+                  const gPerm = globalPricing['permanent'] || Math.round(base * 1.8);
+
+                  const overrides = panelOverwrites[mod.id] || {};
+                  const v15 = overrides['15Days'] !== undefined ? overrides['15Days'] : '';
+                  const v20 = overrides['20Days'] !== undefined ? overrides['20Days'] : '';
+                  const v30 = overrides['30Days'] !== undefined ? overrides['30Days'] : '';
+                  const vPerm = overrides['permanent'] !== undefined ? overrides['permanent'] : '';
+
+                  return (
+                    <div key={mod.id} className="p-4 rounded-2xl bg-slate-900/60 border border-slate-850 space-y-3 font-mono-code text-xs">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                        <span className="font-bold text-white text-[13px]">{mod.name}</span>
+                        <span className="text-[10px] text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">{mod.id}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {/* 15 Days */}
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-1">15 DAYS OVERRIDE</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={v15}
+                              placeholder={`${g15}`}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                setPanelOverwrites(prev => ({
+                                  ...prev,
+                                  [mod.id]: {
+                                    ...prev[mod.id],
+                                    '15Days': val
+                                  }
+                                }));
+                              }}
+                              className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* 20 Days */}
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-1">20 DAYS OVERRIDE</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={v20}
+                              placeholder={`${g20}`}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                setPanelOverwrites(prev => ({
+                                  ...prev,
+                                  [mod.id]: {
+                                    ...prev[mod.id],
+                                    '20Days': val
+                                  }
+                                }));
+                              }}
+                              className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* 30 Days */}
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-1">30 DAYS OVERRIDE</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={v30}
+                              placeholder={`${g30}`}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                setPanelOverwrites(prev => ({
+                                  ...prev,
+                                  [mod.id]: {
+                                    ...prev[mod.id],
+                                    '30Days': val
+                                  }
+                                }));
+                              }}
+                              className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Permanent */}
+                        <div>
+                          <label className="text-[10px] text-slate-500 block mb-1">PERMANENT OVERRIDE</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={vPerm}
+                              placeholder={`${gPerm}`}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                setPanelOverwrites(prev => ({
+                                  ...prev,
+                                  [mod.id]: {
+                                    ...prev[mod.id],
+                                    'permanent': val
+                                  }
+                                }));
+                              }}
+                              className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-between pt-3.5 border-t border-slate-850 gap-3">
+                <button
+                  type="button"
+                  onClick={handleClearAllOverrides}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono-code text-amber-400 font-bold"
+                >
+                  CLEAR ALL OVERRIDES
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCustPricingModalCustomer(null)}
+                    className="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[10px] font-mono-code text-slate-400 hover:text-white"
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading !== null}
+                    className="px-4.5 py-2.5 rounded-xl bg-gradient-to-r from-violet-400 to-fuchsia-500 text-slate-950 font-display font-extrabold text-[10px] tracking-wider shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:scale-[1.02] transition-transform"
+                  >
+                    {actionLoading !== null ? 'SAVING...' : 'SAVE OVERRIDES'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

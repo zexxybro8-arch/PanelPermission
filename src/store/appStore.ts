@@ -23,6 +23,8 @@ import {
   CustomerStats,
   CustomerCreationInput,
   CreatedCustomerResult,
+  PanelPricing,
+  CustomerPricing,
 } from '../types';
 import { storage } from './storage';
 
@@ -55,12 +57,14 @@ export interface AppStoreState {
   sessions: AdminSession[];
   activityLogs: AdminActivityLog[];
   settings: SystemSettingsData;
+  panelPricing: Record<string, PanelPricing>;
+  customerPricing: Record<string, CustomerPricing>;
 }
 
 const STORAGE_KEY = 'aegis_defense_frontend_store_v1';
 
 export class AppStore {
-  private state: AppStoreState;
+  public state: AppStoreState;
   private listeners: Set<() => void> = new Set();
 
   constructor() {
@@ -155,6 +159,28 @@ export class AppStore {
           this.notify();
         }
       }, (err) => console.warn('Firestore settings sync error:', err));
+
+      // 8. Panel Pricing real-time listener
+      onSnapshot(collection(db, 'panelPricing'), (snapshot) => {
+        const map: Record<string, PanelPricing> = {};
+        snapshot.forEach((docSnap) => {
+          map[docSnap.id] = docSnap.data() as PanelPricing;
+        });
+        this.state.panelPricing = map;
+        this.saveToStorageOnly();
+        this.notify();
+      }, (err) => console.warn('Firestore panelPricing sync error:', err));
+
+      // 9. Customer Pricing real-time listener
+      onSnapshot(collection(db, 'customerPricing'), (snapshot) => {
+        const map: Record<string, CustomerPricing> = {};
+        snapshot.forEach((docSnap) => {
+          map[docSnap.id] = docSnap.data() as CustomerPricing;
+        });
+        this.state.customerPricing = map;
+        this.saveToStorageOnly();
+        this.notify();
+      }, (err) => console.warn('Firestore customerPricing sync error:', err));
 
       // Seed initial data if Firestore database is empty
       this.seedFirestoreIfEmpty();
@@ -474,6 +500,8 @@ export class AppStore {
         upiQrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg',
         sessionTimeoutHours: 168,
       },
+      panelPricing: {},
+      customerPricing: {},
     };
   }
 
@@ -483,6 +511,12 @@ export class AppStore {
       if (parsed && Array.isArray(parsed.users) && Array.isArray(parsed.modules)) {
         if (!Array.isArray(parsed.customers)) {
           parsed.customers = [];
+        }
+        if (!parsed.panelPricing) {
+          parsed.panelPricing = {};
+        }
+        if (!parsed.customerPricing) {
+          parsed.customerPricing = {};
         }
         // Ensure stored admin matches current SAGAR551 credentials
         const adminIdx = parsed.users.findIndex((u: any) => u.role === 'admin' || u.username === 'SAGAR551');
@@ -1236,7 +1270,57 @@ export class AppStore {
   // PORTAL & PRICING
   // ==========================================
 
-  public getPortalConfig(userId?: string) {
+  public getEffectivePrice(customerId: string, panelId: string, durationKey: '15Days' | '20Days' | '30Days' | 'permanent'): number {
+    if (customerId) {
+      const customer = this.state.customers.find(c => c.id === customerId || c.customer_id === customerId || c.username?.toLowerCase() === customerId.toLowerCase());
+      const targetId = customer ? customer.id : customerId;
+      const custPricing = this.state.customerPricing?.[targetId];
+      if (custPricing && custPricing[panelId]) {
+        const val = custPricing[panelId][durationKey];
+        if (typeof val === 'number' && val > 0) {
+          return val;
+        }
+      }
+    }
+
+    if (panelId && this.state.panelPricing?.[panelId]) {
+      const val = this.state.panelPricing[panelId][durationKey];
+      if (typeof val === 'number' && val > 0) {
+        return val;
+      }
+    }
+
+    const customer = customerId ? this.state.customers.find(c => c.id === customerId || c.customer_id === customerId || c.username?.toLowerCase() === customerId.toLowerCase()) : null;
+    const panel = this.state.modules.find(m => m.id === panelId);
+    const basePrice = customer?.price ?? panel?.price ?? 120;
+
+    if (durationKey === '15Days') return basePrice;
+    if (durationKey === '20Days') return Math.round(basePrice * 1.15);
+    if (durationKey === '30Days') return Math.round(basePrice * 1.25);
+    if (durationKey === 'permanent') return Math.round(basePrice * 1.8);
+
+    return basePrice;
+  }
+
+  public async savePanelPricing(panelId: string, pricing: PanelPricing) {
+    if (!this.state.panelPricing) {
+      this.state.panelPricing = {};
+    }
+    this.state.panelPricing[panelId] = pricing;
+    this.saveToStorage();
+    await this.syncDocToFirestore('panelPricing', panelId, pricing);
+  }
+
+  public async saveCustomerPricing(customerId: string, pricing: CustomerPricing) {
+    if (!this.state.customerPricing) {
+      this.state.customerPricing = {};
+    }
+    this.state.customerPricing[customerId] = pricing;
+    this.saveToStorage();
+    await this.syncDocToFirestore('customerPricing', customerId, pricing);
+  }
+
+  public getPortalConfig(userId?: string, panelId?: string) {
     const user = userId ? this.state.users.find((u) => u.id === userId || u.username.toUpperCase() === userId.toUpperCase()) : null;
     const customer = userId ? this.state.customers.find((c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase()) : null;
     const targetUserId = user ? user.id : (customer ? customer.id : userId);
@@ -1245,28 +1329,45 @@ export class AppStore {
     const plans = this.state.runtimePlans
       .filter((p) => p.status === 'active')
       .map((plan) => {
+        let durationKey: '15Days' | '20Days' | '30Days' | 'permanent' = '30Days';
+        if (plan.id === 'plan-15' || plan.durationDays === 15) durationKey = '15Days';
+        else if (plan.id === 'plan-20' || plan.durationDays === 20) durationKey = '20Days';
+        else if (plan.id === 'plan-30' || plan.durationDays === 30) durationKey = '30Days';
+        else if (plan.id === 'plan-perm' || plan.id === 'plan-permanent' || plan.durationDays === -1 || plan.durationDays === 3650) durationKey = 'permanent';
+
         let userPrice = plan.defaultPrice;
         let hasCustomPrice = false;
 
-        if (customer && typeof customer.price === 'number') {
-          if (plan.id === 'plan-15') userPrice = customer.price;
-          else if (plan.id === 'plan-20') userPrice = Math.round(customer.price * 1.15);
-          else if (plan.id === 'plan-30') userPrice = Math.round(customer.price * 1.25);
-          else if (plan.id === 'plan-perm') userPrice = Math.round(customer.price * 1.8);
-          hasCustomPrice = true;
-        } else if (customPricing) {
-          if (plan.id === 'plan-15' && customPricing.plan15Price !== undefined) {
-            userPrice = customPricing.plan15Price;
+        if (panelId) {
+          userPrice = this.getEffectivePrice(targetUserId || '', panelId, durationKey);
+          
+          const custPricing = targetUserId ? (this.state.customerPricing?.[targetUserId] || this.state.customerPricing?.[customer?.id || '']) : null;
+          const specificOverride = custPricing?.[panelId]?.[durationKey];
+          const globalOverride = this.state.panelPricing?.[panelId]?.[durationKey];
+          if ((typeof specificOverride === 'number' && specificOverride > 0) || (typeof globalOverride === 'number' && globalOverride > 0)) {
             hasCustomPrice = true;
-          } else if (plan.id === 'plan-20' && customPricing.plan20Price !== undefined) {
-            userPrice = customPricing.plan20Price;
+          }
+        } else {
+          if (customer && typeof customer.price === 'number') {
+            if (plan.id === 'plan-15') userPrice = customer.price;
+            else if (plan.id === 'plan-20') userPrice = Math.round(customer.price * 1.15);
+            else if (plan.id === 'plan-30') userPrice = Math.round(customer.price * 1.25);
+            else if (plan.id === 'plan-perm') userPrice = Math.round(customer.price * 1.8);
             hasCustomPrice = true;
-          } else if (plan.id === 'plan-30' && customPricing.plan30Price !== undefined) {
-            userPrice = customPricing.plan30Price;
-            hasCustomPrice = true;
-          } else if (plan.id === 'plan-perm' && customPricing.planPermPrice !== undefined) {
-            userPrice = customPricing.planPermPrice;
-            hasCustomPrice = true;
+          } else if (customPricing) {
+            if (plan.id === 'plan-15' && customPricing.plan15Price !== undefined) {
+              userPrice = customPricing.plan15Price;
+              hasCustomPrice = true;
+            } else if (plan.id === 'plan-20' && customPricing.plan20Price !== undefined) {
+              userPrice = customPricing.plan20Price;
+              hasCustomPrice = true;
+            } else if (plan.id === 'plan-30' && customPricing.plan30Price !== undefined) {
+              userPrice = customPricing.plan30Price;
+              hasCustomPrice = true;
+            } else if (plan.id === 'plan-perm' && customPricing.planPermPrice !== undefined) {
+              userPrice = customPricing.planPermPrice;
+              hasCustomPrice = true;
+            }
           }
         }
 
@@ -1311,15 +1412,14 @@ export class AppStore {
     const plan = this.state.runtimePlans.find((p) => p.id === planId);
 
     const targetUserId = user ? user.id : (customer ? customer.id : userId);
-    const customPricing = this.state.userPricing[targetUserId];
+    
+    let durationKey: '15Days' | '20Days' | '30Days' | 'permanent' = '30Days';
+    if (planId === 'plan-15' || plan?.durationDays === 15) durationKey = '15Days';
+    else if (planId === 'plan-20' || plan?.durationDays === 20) durationKey = '20Days';
+    else if (planId === 'plan-30' || plan?.durationDays === 30) durationKey = '30Days';
+    else if (planId === 'plan-perm' || planId === 'plan-permanent' || plan?.durationDays === -1 || plan?.durationDays === 3650) durationKey = 'permanent';
 
-    let finalPrice = customPlan?.finalPrice ?? plan?.defaultPrice ?? customer?.price ?? 120;
-    if (!customPlan && customPricing) {
-      if (planId === 'plan-15' && customPricing.plan15Price) finalPrice = customPricing.plan15Price;
-      else if (planId === 'plan-20' && customPricing.plan20Price) finalPrice = customPricing.plan20Price;
-      else if (planId === 'plan-30' && customPricing.plan30Price) finalPrice = customPricing.plan30Price;
-      else if (planId === 'plan-perm' && customPricing.planPermPrice) finalPrice = customPricing.planPermPrice;
-    }
+    const finalPrice = customPlan?.finalPrice ?? this.getEffectivePrice(targetUserId, moduleId, durationKey);
 
     const planName = customPlan?.planName ?? plan?.name ?? planId;
     const durationDays = customPlan?.durationDays ?? plan?.durationDays ?? 30;

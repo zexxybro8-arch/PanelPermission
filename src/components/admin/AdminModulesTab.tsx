@@ -9,6 +9,7 @@ import { CyberModule, Customer } from '../../types';
 import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
 import { compressImage } from '../../utils/imageCompressor';
+import { appStore } from '../../store/appStore';
 
 interface AdminModulesTabProps {
   modules: CyberModule[];
@@ -59,6 +60,60 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
 
   // Assign Customer Modal State
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+
+  // Panel pricing durations state
+  const [pricingModule, setPricingModule] = useState<CyberModule | null>(null);
+  const [price15, setPrice15] = useState<number>(120);
+  const [price20, setPrice20] = useState<number>(138);
+  const [price30, setPrice30] = useState<number>(150);
+  const [pricePerm, setPricePerm] = useState<number>(216);
+
+  useEffect(() => {
+    if (pricingModule) {
+      const saved = appStore.state.panelPricing?.[pricingModule.id];
+      const base = pricingModule.price || 120;
+      if (saved) {
+        setPrice15(saved['15Days'] || base);
+        setPrice20(saved['20Days'] || Math.round(base * 1.15));
+        setPrice30(saved['30Days'] || Math.round(base * 1.25));
+        setPricePerm(saved['permanent'] || Math.round(base * 1.8));
+      } else {
+        setPrice15(base);
+        setPrice20(Math.round(base * 1.15));
+        setPrice30(Math.round(base * 1.25));
+        setPricePerm(Math.round(base * 1.8));
+      }
+    }
+  }, [pricingModule]);
+
+  const handleSavePanelPricing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pricingModule) return;
+    setSaving(true);
+    try {
+      await apiClient.savePanelPricing(pricingModule.id, {
+        '15Days': Number(price15),
+        '20Days': Number(price20),
+        '30Days': Number(price30),
+        'permanent': Number(pricePerm),
+      });
+      setPricingModule(null);
+      onRefresh();
+    } catch (err) {
+      alert('Failed to save panel pricing defaults');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResetToDefault = () => {
+    if (!pricingModule) return;
+    const base = pricingModule.price || 120;
+    setPrice15(base);
+    setPrice20(Math.round(base * 1.15));
+    setPrice30(Math.round(base * 1.25));
+    setPricePerm(Math.round(base * 1.8));
+  };
 
   // Load Customers for Assignments
   useEffect(() => {
@@ -383,6 +438,15 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
                   </span>
 
                   <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPricingModule(mod)}
+                      className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                      title="Manage Panel Pricing"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setEditingModule({ ...mod })}
@@ -951,6 +1015,140 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
                 {saving ? 'DELETING...' : 'DELETE PANEL'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MANAGE PANEL PRICING DURATIONS MODAL */}
+      {/* ======================================================== */}
+      {pricingModule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-fade-in">
+          <div 
+            className="w-full max-w-md rounded-3xl border border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.2)] bg-slate-950 p-6 sm:p-7 space-y-5 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-sm text-white tracking-wider uppercase">
+                    PANEL PRICING SCHEME
+                  </h3>
+                  <span className="text-[10px] font-mono-code text-slate-400">
+                    {pricingModule.name}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setPricingModule(null)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePanelPricing} className="space-y-4">
+              <div className="p-3.5 rounded-2xl bg-emerald-950/10 border border-emerald-500/10 text-xs font-mono-code text-slate-400 space-y-1">
+                <span className="text-emerald-400 font-bold block mb-1">GLOBAL BASE DEFAULT:</span>
+                <div>Base Price (15 Days): <span className="text-white font-bold">₹{pricingModule.price || 120}</span></div>
+                <div className="text-[10px] text-slate-500">
+                  Custom interval pricing defaults are calculated from this base value if not overridden.
+                </div>
+              </div>
+
+              <div className="space-y-3 font-mono-code text-xs">
+                {/* 15 Days Price */}
+                <div className="flex items-center justify-between gap-3 p-1">
+                  <label className="text-slate-400 block shrink-0 font-bold">15 Days Duration Price</label>
+                  <div className="relative max-w-[140px]">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={price15}
+                      onChange={(e) => setPrice15(Number(e.target.value))}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-right text-xs text-white focus:border-emerald-400 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* 20 Days Price */}
+                <div className="flex items-center justify-between gap-3 p-1">
+                  <label className="text-slate-400 block shrink-0 font-bold">20 Days Duration Price</label>
+                  <div className="relative max-w-[140px]">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={price20}
+                      onChange={(e) => setPrice20(Number(e.target.value))}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-right text-xs text-white focus:border-emerald-400 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* 30 Days Price */}
+                <div className="flex items-center justify-between gap-3 p-1">
+                  <label className="text-slate-400 block shrink-0 font-bold">30 Days Duration Price</label>
+                  <div className="relative max-w-[140px]">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={price30}
+                      onChange={(e) => setPrice30(Number(e.target.value))}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-right text-xs text-white focus:border-emerald-400 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Permanent Price */}
+                <div className="flex items-center justify-between gap-3 p-1">
+                  <label className="text-slate-400 block shrink-0 font-bold">Permanent Duration Price</label>
+                  <div className="relative max-w-[140px]">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={pricePerm}
+                      onChange={(e) => setPricePerm(Number(e.target.value))}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-right text-xs text-white focus:border-emerald-400 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-between pt-3.5 border-t border-slate-850 gap-3">
+                <button
+                  type="button"
+                  onClick={handleResetToDefault}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono-code text-amber-400 font-bold"
+                >
+                  RESET TO DEFAULT
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPricingModule(null)}
+                    className="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[10px] font-mono-code text-slate-400 hover:text-white"
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-display font-extrabold text-[10px] tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:scale-[1.02] transition-transform"
+                  >
+                    {saving ? 'SAVING...' : 'SAVE PRICING'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

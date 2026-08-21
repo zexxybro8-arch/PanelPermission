@@ -257,3 +257,18 @@ export interface SystemSettingsData {
   upiQrImageUrl: string;
   sessionTimeoutHours: number;
 }
+
+export interface PanelPricing {
+  "15Days": number;
+  "20Days": number;
+  "30Days": number;
+  "permanent": number;
+}
+
+export type CustomerPricing = Record<string, {
+  "15Days": number | null;
+  "20Days": number | null;
+  "30Days": number | null;
+  "permanent": number | null;
+}>;
+
