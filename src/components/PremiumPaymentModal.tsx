@@ -212,7 +212,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
     return () => clearInterval(timer);
   }, [isOpen, checkoutStep, timeLeft, randomTriggerSeconds]);
 
-  if (!isOpen || !module) return null;
+  // Handlers and helper functions
 
   const handleClose = () => {
     if (cancelState !== 'idle') return;
@@ -361,30 +361,32 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
   const isExpired = timeLeft === 0;
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-        {/* Dark Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={handleClose}
-          className="fixed inset-0 bg-[#020408]/92 backdrop-blur-md"
-        />
+    <AnimatePresence mode="wait">
+      {isOpen && module && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          {/* Dark Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            onClick={handleClose}
+            className="fixed inset-0 bg-[#020408]/92 backdrop-blur-md"
+          />
 
-        {/* Ambient Glow behind the modal */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-          <div className="w-[450px] h-[450px] bg-cyan-500/8 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '6s' }} />
-        </div>
+          {/* Ambient Glow behind the modal */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+            <div className="w-[450px] h-[450px] bg-cyan-500/8 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '6s' }} />
+          </div>
 
-        {/* Modal Window */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 12 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 12 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="relative w-full max-w-xl my-6 rounded-3xl bg-[#040712]/95 backdrop-blur-2xl border border-cyan-500/35 p-5 sm:p-7 shadow-[0_0_60px_-10px_rgba(0,242,254,0.25)] overflow-hidden z-10 max-h-[90vh] overflow-y-auto"
-        >
+          {/* Modal Window */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="relative w-full max-w-xl my-6 rounded-3xl bg-[#040712]/95 backdrop-blur-2xl border border-cyan-500/35 p-5 sm:p-7 shadow-[0_0_60px_-10px_rgba(0,242,254,0.25)] overflow-hidden z-10 max-h-[90vh] overflow-y-auto"
+          >
           <style dangerouslySetInnerHTML={{ __html: `
             @keyframes shinesweep {
               0% { left: -100%; }
@@ -1102,6 +1104,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
           </AnimatePresence>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };

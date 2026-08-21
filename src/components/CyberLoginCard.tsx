@@ -6,7 +6,6 @@ import {
 import confetti from 'canvas-confetti';
 import { UserProfile } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
-import { CyberPoWVerification } from './CyberPoWVerification';
 import { apiClient } from '../services/apiClient';
 import { extractErrorMessage } from '../utils/errorMessage';
 
@@ -25,9 +24,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   const [passphrase, setPassphrase] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Human PoW Proof State
-  const [isPoWVerified, setIsPoWVerified] = useState(false);
-
   // Authentication Sequence States
   const [authStep, setAuthStep] = useState<
     'idle' | 'hashing' | 'lattice' | 'decrypting' | 'granted' | 'error'
@@ -37,15 +33,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
   // Execute Strict Authentication Flow via Server Backend / Resilient Client Engine
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Human Proof of Work Verification check
-    if (!isPoWVerified) {
-      cyberAudio.playError();
-      setAuthStep('error');
-      setAuthStatusMessage('VERIFICATION REQUIRED: Complete Proof-of-Work matrix');
-      setTimeout(() => setAuthStep('idle'), 2500);
-      return;
-    }
 
     const trimmedId = operatorId.trim();
     const trimmedPass = passphrase.trim();
@@ -148,18 +135,18 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
 
         {/* Card Header & Portal Details */}
-        <div className="mb-6 text-left">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="mb-6 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-500/40 tracking-wider flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
               SECURE AUTHENTICATION GATEWAY
             </span>
           </div>
           <h1 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wider">
-            PANEL ACCESS
+            PANEL STORE
           </h1>
           <p className="text-xs text-slate-400 font-mono-code mt-1.5 tracking-wider uppercase leading-relaxed">
-            ENTER AUTHORIZED ID AND VALID PASS KEY TO ACCESS YOUR PANEL
+            AUTHENTICATE WITH YOUR CREDENTIALS
           </p>
         </div>
 
@@ -172,7 +159,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                 <Key className="w-3.5 h-3.5 text-cyan-400" />
                 ENTER AUTHORISED ID
               </label>
-              <span className="text-[10px] font-mono-code text-cyan-400/80">SHA-256 HASHED</span>
             </div>
 
             <div className="relative">
@@ -204,7 +190,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
                 <Lock className="w-3.5 h-3.5 text-cyan-400" />
                 ENTER VALID PASS KEY
               </label>
-              <span className="text-[10px] font-mono-code text-slate-500">ENCRYPTED INPUT</span>
             </div>
 
             <div className="relative">
@@ -239,12 +224,6 @@ export const CyberLoginCard: React.FC<CyberLoginCardProps> = ({
               </button>
             </div>
           </div>
-
-          {/* Interactive Proof of Work (PoW) Human Verification */}
-          <CyberPoWVerification
-            isVerified={isPoWVerified}
-            onVerify={setIsPoWVerified}
-          />
 
           {/* Authentication Submit Button */}
           <div className="pt-2">

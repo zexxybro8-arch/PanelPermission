@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
-  ArrowLeft, Terminal, Lock, 
+  ArrowLeft, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
   Flame, ChevronRight, ShieldCheck, LayoutDashboard, Radio, Shield,
   User, Copy, CheckCircle2, ImageIcon, FileText, Settings, Key, Check,
@@ -303,19 +303,6 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
               <span>ADMIN PANEL</span>
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={() => {
-              cyberAudio.playClick(1200);
-              onOpenTerminal();
-            }}
-            className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-xs font-mono-code text-cyan-300 hover:text-white flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <Terminal className="w-4 h-4 text-cyan-400" />
-            <span className="hidden sm:inline">SYSTEM CONSOLE</span>
-            <span className="sm:hidden">CONSOLE</span>
-          </button>
 
           <button
             type="button"
