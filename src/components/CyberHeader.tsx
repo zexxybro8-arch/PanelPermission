@@ -2,45 +2,80 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Shield, User, X, Copy, CheckCircle2, Award, 
-  ShieldAlert, Calendar, Clock, MapPin, Monitor, Key, RefreshCw
+  ShieldAlert, Calendar, Clock, MapPin, Monitor, Key, RefreshCw,
+  Menu, LogOut, Terminal, LayoutDashboard, ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile, GeneratedKeyRecord } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
 import { apiClient } from '../services/apiClient';
+import { appStore } from '../store/appStore';
 
 interface CyberHeaderProps {
   onOpenAdminLogin: () => void;
   user?: UserProfile | null;
+  onLogout?: () => void;
+  onOpenTerminal?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const CyberHeader: React.FC<CyberHeaderProps> = ({
   onOpenAdminLogin,
   user,
+  onLogout,
+  onOpenTerminal,
+  onOpenAdmin,
 }) => {
   const [timeStr, setTimeStr] = useState<string>('');
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [isMyKeysOpen, setIsMyKeysOpen] = useState<boolean>(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [userKeys, setUserKeys] = useState<GeneratedKeyRecord[]>([]);
   const [isLoadingKeys, setIsLoadingKeys] = useState<boolean>(false);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isProfileOpen && user) {
+    if (isMyKeysOpen && user) {
       setIsLoadingKeys(true);
       const targetUserId = user.customer_id || user.id || user.username;
-      apiClient.getGeneratedKeys(targetUserId)
-        .then((keys) => {
-          setUserKeys(keys || []);
-        })
-        .catch((err) => {
+
+      const fetchAndSortKeys = async () => {
+        try {
+          const keys = await apiClient.getGeneratedKeys(targetUserId);
+          const sorted = (keys || []).slice().sort((a, b) => {
+            const getTs = (rec: GeneratedKeyRecord) => {
+              const dateVal = rec.createdAt || (rec as any).generatedAt || (rec as any).purchasedAt;
+              if (!dateVal) return 0;
+              const time = new Date(dateVal).getTime();
+              return isNaN(time) ? 0 : time;
+            };
+            const timeA = getTs(a);
+            const timeB = getTs(b);
+            if (timeB !== timeA) {
+              return timeB - timeA; // Newest first at top
+            }
+            return (b.id || '').localeCompare(a.id || '');
+          });
+          setUserKeys(sorted);
+        } catch (err) {
           console.warn('Failed to fetch user keys:', err);
-        })
-        .finally(() => {
+        } finally {
           setIsLoadingKeys(false);
-        });
+        }
+      };
+
+      fetchAndSortKeys();
+
+      const unsubscribe = appStore.subscribe(() => {
+        fetchAndSortKeys();
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }
-  }, [isProfileOpen, user]);
+  }, [isMyKeysOpen, user]);
 
   const handleCopyValue = async (val: string, recordId: string, type: 'key' | 'id' | 'password') => {
     try {
@@ -54,7 +89,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
   };
 
   useEffect(() => {
-    if (isProfileOpen) {
+    if (isProfileOpen || isMyKeysOpen || isUserMenuOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -62,7 +97,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isProfileOpen]);
+  }, [isProfileOpen, isMyKeysOpen, isUserMenuOpen]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -93,34 +128,56 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
   return (
     <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-row items-center justify-between gap-2 sm:gap-4 z-20 relative">
       {user ? (
-        /* Authenticated Large Profile Header in the same position as the old branding logo */
-        <button
-          type="button"
-          onClick={() => {
-            cyberAudio.playClick(1000);
-            setIsProfileOpen(true);
-          }}
-          className="flex items-center gap-3 sm:gap-4 group cursor-pointer text-left bg-transparent border-0 p-0 outline-none focus:outline-none"
-          title="Open Secure Profile Details"
-        >
-          {/* Large User Profile Icon */}
-          <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-900/95 border-2 border-cyan-500/50 flex items-center justify-center shadow-[0_0_20px_-3px_rgba(0,242,254,0.4)] transition-all duration-300 group-hover:scale-105 group-hover:border-cyan-400 group-hover:shadow-[0_0_25px_rgba(0,242,254,0.6)] shrink-0">
-            <div className="absolute inset-0 bg-cyan-500/10 rounded-full blur-sm" />
-            <span className="text-xl sm:text-2xl select-none relative z-10 filter drop-shadow-[0_0_8px_rgba(0,242,254,0.5)]">👤</span>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 shadow-[0_0_8px_#34d399]" />
-          </div>
+        /* Authenticated Operator Header: THREE-LINE MENU -> USER LOGO -> USER TEXT */
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* 1. THREE-LINE / HAMBURGER MENU CONTROL BUTTON (FIRST) */}
+          <button
+            type="button"
+            id="user-3-line-menu-btn"
+            onClick={() => {
+              cyberAudio.playClick(1100);
+              setIsUserMenuOpen((prev) => !prev);
+            }}
+            className={`p-2.5 sm:p-3 rounded-2xl bg-slate-900/90 border transition-all duration-300 cursor-pointer flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(0,242,254,0.2)] ${
+              isUserMenuOpen
+                ? 'border-cyan-400 text-cyan-300 bg-cyan-950/80 shadow-[0_0_20px_rgba(0,242,254,0.4)]'
+                : 'border-cyan-500/40 text-slate-300 hover:text-white hover:border-cyan-400 hover:bg-slate-800'
+            }`}
+            title="Toggle User Menu"
+          >
+            <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
+          </button>
 
-          <div className="font-mono-code leading-none">
-            <div className="font-display font-black text-lg sm:text-2xl tracking-widest text-white group-hover:text-cyan-200 transition-colors flex items-center gap-2 uppercase">
-              <span>USER</span>
-              <span className="text-cyan-500 font-bold">-</span>
-              <span className="text-cyan-300 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)]">{user.customer_id || user.id || 'CUST-UNKNOWN'}</span>
+          {/* 2 & 3. USER PROFILE LOGO/AVATAR (SECOND) -> USER NAME TEXT (THIRD) */}
+          <button
+            type="button"
+            onClick={() => {
+              cyberAudio.playClick(1000);
+              setIsUserMenuOpen((prev) => !prev);
+            }}
+            className="flex items-center gap-2.5 sm:gap-3 group cursor-pointer text-left bg-transparent border-0 p-0 outline-none focus:outline-none"
+            title="Open User Menu"
+          >
+            {/* 2. User Profile Avatar Logo */}
+            <div className="relative w-11 h-11 sm:w-13 sm:h-13 rounded-full bg-slate-900/95 border-2 border-cyan-500/50 flex items-center justify-center shadow-[0_0_20px_-3px_rgba(0,242,254,0.4)] transition-all duration-300 group-hover:scale-105 group-hover:border-cyan-400 group-hover:shadow-[0_0_25px_rgba(0,242,254,0.6)] shrink-0">
+              <div className="absolute inset-0 bg-cyan-500/10 rounded-full blur-sm" />
+              <span className="text-lg sm:text-xl select-none relative z-10 filter drop-shadow-[0_0_8px_rgba(0,242,254,0.5)]">👤</span>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 shadow-[0_0_8px_#34d399]" />
             </div>
-            <p className="text-[9px] sm:text-[10px] text-slate-400 tracking-wider mt-1.5 font-bold uppercase">
-              AUTHENTICATED GATEWAY OPERATOR // STATUS SECURE
-            </p>
-          </div>
-        </button>
+
+            {/* 3. User Name Text */}
+            <div className="font-mono-code leading-none">
+              <div className="font-display font-black text-base sm:text-xl tracking-widest text-white group-hover:text-cyan-200 transition-colors flex items-center gap-2 uppercase">
+                <span>USER</span>
+                <span className="text-cyan-500 font-bold">-</span>
+                <span className="text-cyan-300 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)]">{user.customer_id || user.id || 'CUST-UNKNOWN'}</span>
+              </div>
+              <p className="text-[9px] sm:text-[10px] text-slate-400 tracking-wider mt-1 font-bold uppercase">
+                AUTHENTICATED GATEWAY OPERATOR
+              </p>
+            </div>
+          </button>
+        </div>
       ) : (
         /* Brand Identity - Only shown if NO authenticated user (Clicking AEGIS logo opens ADMIN PANEL LOGIN) */
         <div className="flex items-center gap-2 sm:gap-3">
@@ -173,7 +230,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
         </div>
       )}
 
-      {/* Right status capsule / placeholder for desktop spacing balancing - Only shown if NO authenticated user */}
+      {/* Right status capsule - Only shown if NO authenticated user */}
       {!user && (
         <div className="flex items-center gap-2 text-[11px] font-mono-code text-slate-400">
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 border border-slate-800">
@@ -184,7 +241,191 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
         </div>
       )}
 
-      {/* PROFESSIONAL PROFILE MODAL */}
+      {/* 3-LINE USER MENU DROPDOWN / NAVIGATION POPOVER */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isUserMenuOpen && user && (
+            <div className="fixed inset-0 z-[9990] flex items-start justify-start p-4 sm:p-6 overflow-hidden">
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsUserMenuOpen(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[9989] cursor-pointer"
+              />
+
+              {/* Menu Container */}
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="relative z-[9990] w-full max-w-sm rounded-2xl cyber-glass p-5 border border-cyan-500/40 shadow-[0_0_40px_rgba(0,242,254,0.3)] bg-slate-950 space-y-4 mt-16 sm:mt-20"
+              >
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="font-display font-bold text-xs text-cyan-300 tracking-wider uppercase">
+                      OPERATOR MENU // {user.customer_id || user.id}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 font-mono-code text-xs">
+                  {/* USER PROFILE Option */}
+                  <button
+                    type="button"
+                    id="menu-user-profile-btn"
+                    onClick={() => {
+                      cyberAudio.playClick(1000);
+                      setIsUserMenuOpen(false);
+                      setIsProfileOpen(true);
+                    }}
+                    className="w-full p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/80 via-slate-900/90 to-slate-900/80 hover:from-cyan-900/90 hover:to-slate-800/90 border border-cyan-500/40 hover:border-cyan-400 text-left flex items-center justify-between transition-all group cursor-pointer shadow-[0_0_15px_rgba(0,242,254,0.15)]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-cyan-900/80 border border-cyan-400/50 flex items-center justify-center text-cyan-300 group-hover:scale-105 transition-transform shadow-[0_0_10px_rgba(0,242,254,0.2)]">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-display font-bold text-sm text-white block uppercase group-hover:text-cyan-200 tracking-wider">
+                          USER PROFILE
+                        </span>
+                        <span className="text-[10px] text-cyan-400/80 block font-mono-code">
+                          View Account Profile
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                  </button>
+
+                  {/* MY KEYS Option */}
+                  <button
+                    type="button"
+                    id="menu-my-keys-btn"
+                    onClick={() => {
+                      cyberAudio.playClick(1100);
+                      setIsUserMenuOpen(false);
+                      setIsMyKeysOpen(true);
+                    }}
+                    className="w-full p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-cyan-500/30 hover:border-cyan-400 text-left flex items-center justify-between transition-all group cursor-pointer shadow-[0_0_10px_rgba(0,242,254,0.1)]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-300 group-hover:scale-105 transition-transform shadow-[0_0_10px_rgba(0,242,254,0.2)]">
+                        <Key className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-display font-bold text-sm text-white block uppercase group-hover:text-cyan-200 tracking-wider">
+                          MY KEYS
+                        </span>
+                        <span className="text-[10px] text-slate-400 block font-mono-code">
+                          View Purchased Panels &amp; Generated Access
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                  </button>
+
+                  {/* SYSTEM CONSOLE Option */}
+                  {onOpenTerminal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cyberAudio.playClick(1200);
+                        setIsUserMenuOpen(false);
+                        onOpenTerminal();
+                      }}
+                      className="w-full p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-left flex items-center justify-between transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-cyan-400">
+                          <Terminal className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-display font-bold text-xs text-slate-200 block uppercase group-hover:text-cyan-300">
+                            SYSTEM CONSOLE
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Diagnostics &amp; Real-time Logs
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  )}
+
+                  {/* ADMIN PANEL Option */}
+                  {onOpenAdmin && user.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cyberAudio.playClick(1400);
+                        setIsUserMenuOpen(false);
+                        onOpenAdmin();
+                      }}
+                      className="w-full p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/40 text-left flex items-center justify-between transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
+                          <LayoutDashboard className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-display font-bold text-xs text-cyan-300 block uppercase">
+                            ADMIN PANEL
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Manage System &amp; Customers
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  )}
+
+                  {/* LOGOUT Option */}
+                  {onLogout && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cyberAudio.playClick(900);
+                        setIsUserMenuOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full p-3 rounded-xl bg-rose-950/30 hover:bg-rose-950/60 border border-rose-500/30 hover:border-rose-500/60 text-left flex items-center justify-between transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-rose-950 border border-rose-500/40 flex items-center justify-center text-rose-400">
+                          <LogOut className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-display font-bold text-xs text-rose-300 block uppercase">
+                            BACK TO GATEWAY / LOGOUT
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Exit Secure Session
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-rose-400 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* USER PROFILE MODAL */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {isProfileOpen && user && (
@@ -208,7 +449,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="relative w-full max-w-lg rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-6 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden z-[9999]"
+                className="relative w-full max-w-xl rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-6 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden z-[9999]"
                 style={{ WebkitOverflowScrolling: 'touch' }}
               >
                 {/* Top Accent Line */}
@@ -222,10 +463,10 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                     </div>
                     <div>
                       <h3 className="font-display font-bold text-lg text-white tracking-wide uppercase">
-                        SECURE PROFILE
+                        USER PROFILE
                       </h3>
                       <p className="text-[10px] font-mono-code text-slate-400 tracking-wider">
-                        CRYPTOGRAPHIC ACCOUNT CREDENTIALS
+                        SECURE USER DETAILS &amp; MY KEYS HISTORY
                       </p>
                     </div>
                   </div>
@@ -243,213 +484,285 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                   </button>
                 </div>
 
-                {/* Profile Avatar / Status Card */}
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/60 to-slate-950/60 border border-slate-800 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left relative overflow-hidden">
-                  <div className="relative w-16 h-16 rounded-2xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0 shadow-[0_0_15px_rgba(0,242,254,0.15)]">
-                    <span className="text-3xl select-none">👤</span>
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] text-cyan-300 font-bold">
-                      {user.clearanceLevel || 3}
+                {/* USER PROFILE — DETAILS ONLY */}
+                <div className="space-y-4 p-5 rounded-2xl bg-slate-900/40 border border-slate-800/90 relative overflow-hidden">
+                  {/* Profile Avatar / Status Card */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-950/80 border border-slate-800 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left relative overflow-hidden">
+                    <div className="relative w-16 h-16 rounded-2xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0 shadow-[0_0_15px_rgba(0,242,254,0.15)]">
+                      <span className="text-3xl select-none">👤</span>
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-[10px] text-cyan-300 font-bold">
+                        {user.clearanceLevel || 3}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 w-full min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <span className="font-display font-black text-xl text-white truncate">
+                          {user.username}
+                        </span>
+                        <div className="shrink-0">
+                          {user.status === 'blocked' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-rose-950 text-rose-400 border border-rose-500/40">
+                              <ShieldAlert className="w-3 h-3" />
+                              BLOCKED
+                            </span>
+                          ) : isExpired ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-amber-950 text-amber-400 border border-amber-500/40">
+                              <ShieldAlert className="w-3 h-3 animate-pulse" />
+                              EXPIRED
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              ACTIVE
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-mono-code text-cyan-400/80 uppercase tracking-widest flex items-center gap-1 justify-center sm:justify-start">
+                        <Award className="w-3.5 h-3.5" />
+                        Clearance Level: {user.clearanceLevel || 3} [OPERATOR]
+                      </p>
                     </div>
                   </div>
 
-                  <div className="space-y-1 w-full min-w-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <span className="font-display font-black text-xl text-white truncate">
-                        {user.username}
+                  {copiedField && (
+                    <div className="text-center">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-mono-code text-emerald-400 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40 animate-pulse">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Copied {copiedField} to clipboard!
                       </span>
-                      <div className="shrink-0">
-                        {user.status === 'blocked' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-rose-950 text-rose-400 border border-rose-500/40">
-                            <ShieldAlert className="w-3 h-3" />
-                            BLOCKED
+                    </div>
+                  )}
+
+                  {/* User Details Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 font-mono-code text-xs text-left">
+                    {/* Customer ID */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1 relative">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">CUSTOMER ID</span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-bold text-cyan-300 truncate">
+                          {user.customer_id || user.id || 'N/A'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            cyberAudio.playClick(600);
+                            copyToClipboard(user.customer_id || user.id || 'N/A', 'Customer ID');
+                          }}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300 transition-colors"
+                          title="Copy Customer ID"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Secure Codename */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1 relative">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">CODENAME</span>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-bold text-white truncate">
+                          {user.codename || 'OPERATOR'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            cyberAudio.playClick(600);
+                            copyToClipboard(user.codename || 'OPERATOR', 'Codename');
+                          }}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300 transition-colors"
+                          title="Copy Codename"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Subscription Plan Name */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1 relative">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">PLAN / SUBSCRIPTION</span>
+                      <div className="font-bold text-white flex items-center gap-1.5">
+                        <Shield className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="truncate">AEGIS CORE PLAN</span>
+                      </div>
+                    </div>
+
+                    {/* Price / Billing Rate */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1 relative">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">BILLING PRICE</span>
+                      <div className="font-bold text-cyan-300 flex items-center gap-1">
+                        <span className="text-xs text-slate-400 font-normal">₹</span>
+                        <span>{user.price || 120}</span>
+                      </div>
+                    </div>
+
+                    {/* Expiry / Remaining Days */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1 relative sm:col-span-2">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">EXPIRATION CALENDAR</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 font-bold text-white">
+                          <Calendar className="w-4 h-4 text-cyan-400" />
+                          <span>
+                            {user.expiry_date ? new Date(user.expiry_date).toLocaleString() : 'N/A'}
                           </span>
-                        ) : isExpired ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-amber-950 text-amber-400 border border-amber-500/40">
-                            <ShieldAlert className="w-3 h-3 animate-pulse" />
-                            EXPIRED
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            ACTIVE
+                        </div>
+                        {daysRemaining !== null && (
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            isExpired 
+                              ? 'bg-rose-950 text-rose-400 border border-rose-500/30'
+                              : daysRemaining <= 3
+                                ? 'bg-amber-950 text-amber-400 border border-amber-500/30'
+                                : 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
+                          }`}>
+                            <Clock className="w-3 h-3" />
+                            {isExpired ? 'EXPIRED' : `${daysRemaining} DAYS REMAINING`}
                           </span>
                         )}
                       </div>
                     </div>
-                    <p className="text-[10px] font-mono-code text-cyan-400/80 uppercase tracking-widest flex items-center gap-1 justify-center sm:justify-start">
-                      <Award className="w-3.5 h-3.5" />
-                      Clearance Level: {user.clearanceLevel || 3} [OPERATOR]
-                    </p>
-                  </div>
-                </div>
 
-                {copiedField && (
-                  <div className="text-center">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-mono-code text-emerald-400 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40 animate-pulse">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Copied {copiedField} to clipboard!
-                    </span>
-                  </div>
-                )}
-
-                {/* Info Details Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 font-mono-code text-xs text-left">
-                  {/* Customer ID */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-1 relative">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">CUSTOMER ID</span>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-bold text-cyan-300 truncate">
-                        {user.customer_id || user.id || 'N/A'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          cyberAudio.playClick(600);
-                          copyToClipboard(user.customer_id || user.id || 'N/A', 'Customer ID');
-                        }}
-                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300 transition-colors"
-                        title="Copy Customer ID"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Secure Codename */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-1 relative">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">CODENAME</span>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-bold text-white truncate">
-                        {user.codename || 'OPERATOR'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          cyberAudio.playClick(600);
-                          copyToClipboard(user.codename || 'OPERATOR', 'Codename');
-                        }}
-                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300 transition-colors"
-                        title="Copy Codename"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Subscription Plan Name */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-1 relative">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">PLAN / SUBSCRIPTION</span>
-                    <div className="font-bold text-white flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="truncate">AEGIS CORE PLAN</span>
-                    </div>
-                  </div>
-
-                  {/* Price / Billing Rate */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-1 relative">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">BILLING PRICE</span>
-                    <div className="font-bold text-cyan-300 flex items-center gap-1">
-                      <span className="text-xs text-slate-400 font-normal">₹</span>
-                      <span>{user.price || 120}</span>
-                    </div>
-                  </div>
-
-                  {/* Expiry / Remaining Days */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-1 relative sm:col-span-2">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">EXPIRATION CALENDAR</span>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 font-bold text-white">
-                        <Calendar className="w-4 h-4 text-cyan-400" />
-                        <span>
-                          {user.expiry_date ? new Date(user.expiry_date).toLocaleString() : 'N/A'}
-                        </span>
+                    {/* Secure Node region */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1 relative">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">NODE REGION</span>
+                      <div className="font-bold text-white flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{user.nodeRegion || 'Asia-SE'}</span>
                       </div>
-                      {daysRemaining !== null && (
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          isExpired 
-                            ? 'bg-rose-950 text-rose-400 border border-rose-500/30'
-                            : daysRemaining <= 3
-                              ? 'bg-amber-950 text-amber-400 border border-amber-500/30'
-                              : 'bg-emerald-950 text-emerald-400 border border-emerald-500/30'
-                        }`}>
-                          <Clock className="w-3 h-3" />
-                          {isExpired ? 'EXPIRED' : `${daysRemaining} DAYS REMAINING`}
-                        </span>
-                      )}
                     </div>
-                  </div>
 
-                  {/* Secure Node region */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-1 relative">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">NODE REGION</span>
-                    <div className="font-bold text-white flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>{user.nodeRegion || 'Asia-SE'}</span>
-                    </div>
-                  </div>
-
-                  {/* Assigned Terminal */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800/80 space-y-1 relative">
-                    <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">SECURE TERMINAL ID</span>
-                    <div className="font-bold text-white flex items-center gap-1.5">
-                      <Monitor className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="truncate">{user.terminalId || 'N/A'}</span>
+                    {/* Assigned Terminal */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1 relative">
+                      <span className="text-[10px] text-slate-500 font-bold block uppercase tracking-wider">SECURE TERMINAL ID</span>
+                      <div className="font-bold text-white flex items-center gap-1.5">
+                        <Monitor className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="truncate">{user.terminalId || 'N/A'}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* GENERATED ACCESS HISTORY — MY KEYS SECTION */}
-                <div className="space-y-3 pt-4 border-t border-slate-800/80">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
-                        <Key className="w-3.5 h-3.5" />
-                      </div>
-                      <h4 className="font-display font-bold text-sm text-white tracking-wider uppercase">
+                {/* Close Button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cyberAudio.playClick(900);
+                      setIsProfileOpen(false);
+                    }}
+                    className="w-full py-3 px-6 rounded-xl font-display font-bold tracking-widest text-xs text-slate-950 bg-gradient-to-r from-cyan-400 via-sky-300 to-cyan-400 hover:from-cyan-300 hover:to-sky-200 transition-all duration-300 shadow-[0_0_20px_-3px_rgba(0,242,254,0.3)] flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>CLOSE USER PROFILE</span>
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* MY KEYS DEDICATED MODAL */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isMyKeysOpen && user && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-hidden">
+              {/* Fixed Backdrop overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => {
+                  cyberAudio.playClick(900);
+                  setIsMyKeysOpen(false);
+                }}
+                className="absolute inset-0 bg-black/90 backdrop-blur-md z-[9998] cursor-pointer"
+              />
+
+              {/* Modal Body Container */}
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="relative w-full max-w-xl rounded-3xl cyber-glass p-6 sm:p-7 border border-cyan-500/30 shadow-[0_0_60px_rgba(0,242,254,0.25)] bg-slate-950 space-y-6 my-auto max-h-[85dvh] sm:max-h-[90dvh] overflow-y-auto overflow-x-hidden z-[9999]"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                {/* Top Accent Line */}
+                <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_10px_#00f2fe]" />
+
+                {/* Modal Header */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.25)]">
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-bold text-lg text-white tracking-wide uppercase">
                         MY KEYS
-                      </h4>
+                      </h3>
+                      <p className="text-[10px] font-mono-code text-slate-400 tracking-wider">
+                        PURCHASED PANELS &amp; GENERATED ACCESS HISTORY
+                      </p>
                     </div>
-                    <span className="text-[10px] font-mono-code px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30 font-bold">
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono-code px-2.5 py-1 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/40 font-bold">
                       {userKeys.length} {userKeys.length === 1 ? 'RECORD' : 'RECORDS'}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cyberAudio.playClick(900);
+                        setIsMyKeysOpen(false);
+                      }}
+                      className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-slate-400 hover:text-white transition-all cursor-pointer"
+                      title="Close My Keys"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
+                </div>
 
+                {/* MY KEYS CONTENT */}
+                <div className="space-y-3.5">
                   {isLoadingKeys ? (
-                    <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 flex items-center justify-center gap-2 text-slate-400 font-mono-code text-xs">
+                    <div className="p-8 rounded-2xl bg-slate-900/50 border border-slate-800 flex items-center justify-center gap-2 text-slate-400 font-mono-code text-xs">
                       <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
                       <span>Loading access history...</span>
                     </div>
                   ) : userKeys.length === 0 ? (
-                    <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800/80 text-center space-y-1.5">
-                      <div className="w-10 h-10 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
-                        <Key className="w-5 h-5" />
+                    <div className="p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80 text-center space-y-2">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500 shadow-inner">
+                        <Key className="w-6 h-6" />
                       </div>
-                      <p className="font-display font-bold text-sm text-slate-300">No Keys Yet</p>
+                      <p className="font-display font-bold text-base text-slate-300">No Keys Found</p>
                       <p className="text-xs font-mono-code text-slate-500 max-w-xs mx-auto">
-                        Your purchased panel access will appear here after a successful purchase.
+                        Your purchased panel access credentials will be saved and shown here automatically after a successful purchase.
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-3.5 max-h-80 overflow-y-auto pr-1">
+                    <div className="space-y-3.5 max-h-[50dvh] overflow-y-auto pr-1">
                       {userKeys.map((k) => {
-                        const keyVal = k.key || k.generatedId;
-                        const idVal = k.generatedId || k.credentials?.id;
-                        const passVal = k.generatedPassword || k.credentials?.password;
-                        const isKeyCopied = copiedKeyId === `${k.id}-key`;
+                        const idVal = k.generatedId || k.credentials?.id || k.key;
+                        const passVal = k.generatedPassword || k.credentials?.password || '';
                         const isIdCopied = copiedKeyId === `${k.id}-id`;
                         const isPassCopied = copiedKeyId === `${k.id}-password`;
 
-                        const isExpired = k.expiresAt && new Date(k.expiresAt) < new Date();
+                        const isKeyExpired = k.expiresAt && new Date(k.expiresAt) < new Date();
                         const statusBadge = k.status === 'revoked' ? (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-rose-950 text-rose-400 border border-rose-500/30">
+                          <span className="px-2.5 py-0.5 rounded text-[10px] font-mono-code font-bold bg-rose-950 text-rose-400 border border-rose-500/30">
                             REVOKED
                           </span>
-                        ) : isExpired ? (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-amber-950 text-amber-400 border border-amber-500/30">
+                        ) : isKeyExpired ? (
+                          <span className="px-2.5 py-0.5 rounded text-[10px] font-mono-code font-bold bg-amber-950 text-amber-400 border border-amber-500/30">
                             EXPIRED
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/30">
+                          <span className="px-2.5 py-0.5 rounded text-[10px] font-mono-code font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/30">
                             ACTIVE
                           </span>
                         );
@@ -457,30 +770,32 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                         return (
                           <div
                             key={k.id}
-                            className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800/90 hover:border-cyan-500/40 transition-all space-y-3 text-left shadow-lg"
+                            className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 transition-all space-y-3 text-left relative group shadow-md"
                           >
-                            {/* Header: Logo, Panel Name, Package & Status */}
-                            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                            {/* Card Top: Panel Logo, Panel Name, Duration, Status */}
+                            <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
                               <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                                <div className="w-9 h-9 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0 shadow-[0_0_10px_rgba(0,242,254,0.2)]">
                                   <Shield className="w-4 h-4" />
                                 </div>
                                 <div className="min-w-0">
-                                  <h5 className="font-display font-bold text-sm text-white truncate uppercase tracking-wide">
-                                    {k.panelName || 'CYBER PANEL'}
+                                  <h5 className="font-display font-bold text-sm text-white truncate">
+                                    {k.panelName || 'AEGIS PANEL'}
                                   </h5>
-                                  <span className="text-[10px] font-mono-code text-cyan-300 block font-bold">
-                                    {k.duration || '30 DAYS'}
+                                  <span className="text-[10px] font-mono-code text-cyan-400/90 block">
+                                    PACKAGE / DURATION: {k.duration || '30 DAYS'}
                                   </span>
                                 </div>
                               </div>
-                              <div className="shrink-0">{statusBadge}</div>
+                              <div className="shrink-0">
+                                {statusBadge}
+                              </div>
                             </div>
 
-                            {/* Credential Items with Separate COPY buttons */}
-                            <div className="space-y-2 font-mono-code text-xs">
+                            {/* Credentials Grid: Access ID & Access Password */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono-code">
                               {/* Access ID */}
-                              <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80 flex items-center justify-between gap-2">
+                              <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between gap-2">
                                 <div className="min-w-0 flex-1">
                                   <span className="text-[9px] text-slate-500 block uppercase font-bold">ACCESS ID</span>
                                   <span className="font-bold text-cyan-300 text-xs break-all block select-all">
@@ -491,23 +806,24 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                                   type="button"
                                   onClick={() => handleCopyValue(idVal, k.id, 'id')}
                                   className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono-code flex items-center gap-1 cursor-pointer shrink-0 transition-colors"
+                                  title="Copy Access ID"
                                 >
                                   {isIdCopied ? (
                                     <>
                                       <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                      <span className="text-emerald-400 font-bold">Copied ✓</span>
+                                      <span className="text-emerald-400 font-bold">COPIED ✓</span>
                                     </>
                                   ) : (
                                     <>
                                       <Copy className="w-3 h-3" />
-                                      <span>Copy ID</span>
+                                      <span className="font-bold">COPY ID</span>
                                     </>
                                   )}
                                 </button>
                               </div>
 
                               {/* Access Password */}
-                              <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80 flex items-center justify-between gap-2">
+                              <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between gap-2">
                                 <div className="min-w-0 flex-1">
                                   <span className="text-[9px] text-slate-500 block uppercase font-bold">ACCESS PASSWORD</span>
                                   <span className="font-bold text-white text-xs break-all block select-all">
@@ -518,16 +834,17 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                                   type="button"
                                   onClick={() => handleCopyValue(passVal, k.id, 'password')}
                                   className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono-code flex items-center gap-1 cursor-pointer shrink-0 transition-colors"
+                                  title="Copy Access Password"
                                 >
                                   {isPassCopied ? (
                                     <>
                                       <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                      <span className="text-emerald-400 font-bold">Copied ✓</span>
+                                      <span className="text-emerald-400 font-bold">COPIED ✓</span>
                                     </>
                                   ) : (
                                     <>
                                       <Copy className="w-3 h-3" />
-                                      <span>Copy Password</span>
+                                      <span className="font-bold">COPY PASSWORD</span>
                                     </>
                                   )}
                                 </button>
@@ -535,7 +852,7 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                             </div>
 
                             {/* Purchase & Expiry dates */}
-                            <div className="flex items-center justify-between text-[10px] font-mono-code text-slate-500 pt-1 border-t border-slate-800/50">
+                            <div className="flex items-center justify-between text-[10px] font-mono-code text-slate-500 pt-1.5 border-t border-slate-800/60">
                               <span>PURCHASED: {new Date(k.createdAt).toLocaleDateString()}</span>
                               <span>
                                 EXPIRES: {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : 'LIFETIME'}
@@ -554,12 +871,12 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                     type="button"
                     onClick={() => {
                       cyberAudio.playClick(900);
-                      setIsProfileOpen(false);
+                      setIsMyKeysOpen(false);
                     }}
                     className="w-full py-3 px-6 rounded-xl font-display font-bold tracking-widest text-xs text-slate-950 bg-gradient-to-r from-cyan-400 via-sky-300 to-cyan-400 hover:from-cyan-300 hover:to-sky-200 transition-all duration-300 shadow-[0_0_20px_-3px_rgba(0,242,254,0.3)] flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <X className="w-4 h-4" />
-                    <span>CLOSE CORE PROFILE</span>
+                    <span>CLOSE MY KEYS</span>
                   </button>
                 </div>
               </motion.div>

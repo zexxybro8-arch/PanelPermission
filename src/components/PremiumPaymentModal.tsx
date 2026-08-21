@@ -941,7 +941,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                     {copiedId ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400 font-bold">Copied ✓</span>
+                        <span className="text-emerald-400 font-bold">COPIED ✓</span>
                       </>
                     ) : (
                       <>
@@ -971,7 +971,7 @@ export const PremiumPaymentModal: React.FC<PremiumPaymentModalProps> = ({
                     {copiedPassword ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400 font-bold">Copied ✓</span>
+                        <span className="text-emerald-400 font-bold">COPIED ✓</span>
                       </>
                     ) : (
                       <>

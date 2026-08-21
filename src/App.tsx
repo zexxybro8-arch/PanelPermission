@@ -284,6 +284,9 @@ export default function App() {
         <CyberHeader
           onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
           user={user}
+          onLogout={handleLogout}
+          onOpenTerminal={() => setIsTerminalOpen(true)}
+          onOpenAdmin={navigateToAdmin}
         />
 
         {/* Main Content Area */}

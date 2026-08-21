@@ -88,21 +88,12 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
     }
   };
 
-  const openVerifyModal = async (mod: CyberModule, prefillId?: string, prefillPassword?: string) => {
+  const openVerifyModal = async (mod: CyberModule) => {
     setActiveVerifyModule(mod);
     setVerifyResult(null);
-    setVerifyIdInput(prefillId || '');
-    setVerifyPasswordInput(prefillPassword || '');
-    const targetUserId = user.id || user.customer_id || user.username;
-    try {
-      const keys = await apiClient.getGeneratedKeys(targetUserId, mod.id);
-      setPanelKeys(keys);
-      if (prefillId && prefillPassword) {
-        setTimeout(() => executeCredentialVerification(prefillId, prefillPassword, mod.id), 100);
-      }
-    } catch (err) {
-      console.warn('Failed to load panel keys:', err);
-    }
+    setVerifyIdInput('');
+    setVerifyPasswordInput('');
+    setIsVerifyingKey(false);
   };
 
   const executeCredentialVerification = async (idToVerify?: string, passToVerify?: string, panelId?: string) => {
@@ -563,8 +554,8 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         user={user}
         plans={plans}
         upiQrImage={upiQrImage}
-        onOpenVerifyWithKey={(mod, key) => {
-          openVerifyModal(mod, key);
+        onOpenVerifyWithKey={(mod) => {
+          openVerifyModal(mod);
         }}
       />
 
@@ -821,54 +812,6 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Registered Credentials for this Panel */}
-            {panelKeys.length > 0 && (
-              <div className="space-y-2 pt-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  REGISTERED CREDENTIALS FOR THIS PANEL ({panelKeys.length})
-                </span>
-                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                  {panelKeys.map((k) => {
-                    const idVal = k.generatedId || k.credentials?.id || k.key;
-                    const passVal = k.generatedPassword || k.credentials?.password || '';
-                    return (
-                      <div
-                        key={k.id}
-                        className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-cyan-500/40 flex items-center justify-between gap-2 text-xs"
-                      >
-                        <div className="min-w-0 flex-1 font-mono-code">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-cyan-300 truncate">
-                              ID: {idVal}
-                            </span>
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30">
-                              {k.duration}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 block truncate">
-                            PASS: {passVal}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setVerifyIdInput(idVal);
-                              setVerifyPasswordInput(passVal);
-                              executeCredentialVerification(idVal, passVal, k.panelId);
-                            }}
-                            className="px-2.5 py-1 rounded bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold hover:from-cyan-400 hover:to-emerald-400 text-[10px] transition-all cursor-pointer"
-                          >
-                            VERIFY
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             )}
 

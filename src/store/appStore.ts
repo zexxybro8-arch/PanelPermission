@@ -2807,7 +2807,7 @@ export class AppStore {
     if (!this.state.generatedKeys) {
       this.state.generatedKeys = [];
     }
-    return this.state.generatedKeys.filter((k) => {
+    const filtered = this.state.generatedKeys.filter((k) => {
       if (userId) {
         const uClean = userId.trim().toLowerCase();
         const kUserClean = (k.userId || '').trim().toLowerCase();
@@ -2843,6 +2843,26 @@ export class AppStore {
       }
       if (panelId && k.panelId !== panelId) return false;
       return true;
+    });
+
+    // Always sort in reverse chronological order: newest created/generated timestamp at the top
+    return filtered.sort((a, b) => {
+      const getTs = (rec: GeneratedKeyRecord) => {
+        const dateVal = rec.createdAt || (rec as any).generatedAt || (rec as any).purchasedAt;
+        if (!dateVal) return 0;
+        const time = new Date(dateVal).getTime();
+        return isNaN(time) ? 0 : time;
+      };
+
+      const timeA = getTs(a);
+      const timeB = getTs(b);
+
+      if (timeB !== timeA) {
+        return timeB - timeA; // Descending (newest first)
+      }
+
+      // Secondary fallback sorting by ID descending if timestamps are identical
+      return (b.id || '').localeCompare(a.id || '');
     });
   }
 }

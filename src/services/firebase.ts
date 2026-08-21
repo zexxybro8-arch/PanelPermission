@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = getApps().length > 0 ? getApp() : initializeApp({
@@ -20,4 +20,16 @@ export const db = initializeFirestore(
   firebaseConfig.firestoreDatabaseId || '(default)'
 );
 
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'system', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('Firebase connection warning:', error.message);
+    }
+  }
+}
+testConnection();
+
 export default app;
+
