@@ -78,7 +78,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [isCreatingVerificationOrder, setIsCreatingVerificationOrder] = useState<boolean>(false);
 
   // Multi-stage state machine for secure credential verification and paywall gating
-  const [verificationStage, setVerificationStage] = useState<'input' | 'validating' | 'payment_required' | 'payment_pending' | 'verified'>('input');
+  const [verificationStage, setVerificationStage] = useState<'input' | 'validating' | 'payment_required' | 'payment_pending' | 'verified' | 'request_pending' | 'request_rejected'>('input');
   const [preValidatedKeyResult, setPreValidatedKeyResult] = useState<VerifyKeyResult | null>(null);
 
   // Fetch user-specific or global verification fee when opening verification modal
@@ -148,31 +148,87 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
     setPreValidatedKeyResult(null);
   };
 
-  const handleCreateVerificationPayment = async () => {
+  // Real-time observer of verification requests
+  useEffect(() => {
+    if (activeVerifyModule && verifyIdInput && (verificationStage === 'request_pending' || verificationStage === 'payment_required')) {
+      const currentUserId = user?.id || user?.customer_id || user?.username || '';
+      // Check if the key has been approved in real-time
+      const keyRecord = appStore.state.generatedKeys?.find(
+        k => (k.generatedId || k.credentials?.id || k.key || '').trim().toUpperCase() === verifyIdInput.trim().toUpperCase()
+      );
+      if (keyRecord && keyRecord.verified) {
+        cyberAudio.playSuccess();
+        setVerificationStage('verified');
+        setVerifyResult({
+          valid: true,
+          message: 'ACCESS VERIFIED ✓',
+          keyRecord: keyRecord
+        });
+      }
+
+      // Check if it got rejected in real-time
+      const req = appStore.state.verificationRequests?.find(
+        r => r.accessId.toUpperCase() === verifyIdInput.trim().toUpperCase() && r.userId === currentUserId
+      );
+      if (req && req.status === 'REJECTED') {
+        setVerificationStage('request_rejected');
+      }
+    }
+  }, [appStore.state.generatedKeys, appStore.state.verificationRequests, activeVerifyModule, verifyIdInput, verificationStage, user]);
+
+  const handleCreateVerificationRequest = async () => {
     if (isCreatingVerificationOrder) return;
     setIsCreatingVerificationOrder(true);
     try {
       const currentUserId = user.id || user.customer_id || user.username || 'USER_10025';
-      const orderRes = await apiClient.createOrder(
-        currentUserId, 
-        activeVerifyModule?.id || '', 
-        'VERIFY-FEE', 
-        {
-          planName: `Verification: ${activeVerifyModule?.name || 'Panel'}`,
-          finalPrice: verificationFee,
-          durationDays: 0
-        }
+      const username = user.username || user.customer_id || 'USER_10025';
+      
+      // Call store adapter to save request persistently in secure Firestore database
+      await apiClient.createVerificationRequest(
+        currentUserId,
+        username,
+        activeVerifyModule?.id || '',
+        activeVerifyModule?.name || 'Panel',
+        verifyIdInput.trim(),
+        verifyPasswordInput.trim(),
+        verificationFee
       );
-      if (orderRes && orderRes.order) {
-        setVerificationOrderId(orderRes.order.id);
-        setVerificationPaymentStatus('PENDING');
-        setVerificationStage('payment_pending');
+
+      // Create standard pending billing order record in the background for consistency
+      try {
+        const orderRes = await apiClient.createOrder(
+          currentUserId, 
+          activeVerifyModule?.id || '', 
+          'VERIFY-FEE', 
+          {
+            planName: `Verification: ${activeVerifyModule?.name || 'Panel'}`,
+            finalPrice: verificationFee,
+            durationDays: 0
+          }
+        );
+        if (orderRes && orderRes.order) {
+          setVerificationOrderId(orderRes.order.id);
+        }
+      } catch (orderErr) {
+        console.warn('Background order creation warning:', orderErr);
       }
-    } catch (err) {
-      console.error('Error creating verification order:', err);
+
+      cyberAudio.playSuccess();
+      setVerificationStage('request_pending');
+    } catch (err: any) {
+      console.error('Error creating verification request:', err);
+      setVerifyResult({
+        valid: false,
+        message: err?.message || 'FAILED TO CREATE VERIFICATION REQUEST'
+      });
     } finally {
       setIsCreatingVerificationOrder(false);
     }
+  };
+
+  const handleCreateVerificationPayment = async () => {
+    // Keep fallback for legacy flows or trigger new workflow directly
+    await handleCreateVerificationRequest();
   };
 
   const executeCredentialVerification = async (idToVerify?: string, passToVerify?: string, panelId?: string) => {
@@ -199,7 +255,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       const pId = panelId || activeVerifyModule?.id;
       const res = await apiClient.verifyAccessCredentials(idStr, passStr, pId);
       
-      if (!res.valid) {
+      if (!res.valid && res.message !== 'VERIFICATION_REQUIRED') {
         cyberAudio.playClick(600);
         setVerifyResult({
           valid: false,
@@ -209,21 +265,36 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         return;
       }
 
-      // Valid credentials! Keep the result
+      // Valid credentials or needs verification! Keep the result
       setPreValidatedKeyResult(res);
 
+      const currentUserId = user.id || user.customer_id || user.username || 'USER_10025';
+
       // Now query the correct global/user-specific verification fee
-      const fee = await apiClient.getUserVerificationFee(user.id || user.customer_id || user.username || '');
+      const fee = await apiClient.getUserVerificationFee(currentUserId);
       setVerificationFee(fee);
 
-      if (fee <= 0) {
-        // Free verification - complete immediately
+      if (res.valid) {
+        // Free/already verified - complete immediately
         cyberAudio.playSuccess();
         setVerifyResult(res);
         setVerificationStage('verified');
       } else {
-        // Fee required - show professional payment required screen smoothly
-        setVerificationStage('payment_required');
+        // Verification required! Let's check for an existing request
+        const existingRequest = appStore.state.verificationRequests?.find(
+          r => r.accessId.toUpperCase() === idStr.toUpperCase() && r.userId === currentUserId
+        );
+        if (existingRequest) {
+          if (existingRequest.status === 'PENDING') {
+            setVerificationStage('request_pending');
+          } else if (existingRequest.status === 'REJECTED') {
+            setVerificationStage('request_rejected');
+          } else {
+            setVerificationStage('payment_required');
+          }
+        } else {
+          setVerificationStage('payment_required');
+        }
       }
     } catch (err: any) {
       setVerifyResult({
@@ -915,6 +986,100 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                   className="w-full py-2.5 px-4 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white font-mono-code text-xs transition-all cursor-pointer"
                 >
                   CANCEL &amp; RETURN
+                </button>
+              </div>
+            )}
+
+            {/* STAGE: REQUEST_PENDING (Verification Request created, awaiting admin approval) */}
+            {verificationStage === 'request_pending' && (
+              <div className="p-5 rounded-2xl bg-[#070e1e]/90 border border-cyan-500/20 text-center space-y-4 shadow-[0_0_25px_rgba(0,242,254,0.1)] animate-fade-in">
+                <div className="w-12 h-12 rounded-2xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center mx-auto text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.2)]">
+                  <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="font-display font-black text-sm text-white tracking-widest uppercase">
+                    VERIFICATION REQUEST SENT
+                  </h4>
+                  <p className="text-[10px] font-mono-code text-slate-300">
+                    Your verification request has been submitted to the administrator.
+                  </p>
+                </div>
+
+                <div className="py-2.5 px-4 bg-slate-950/80 border border-slate-800 rounded-xl max-w-xs mx-auto space-y-0.5">
+                  <span className="text-[9px] font-mono-code text-slate-500 uppercase tracking-wider block">
+                    STATUS:
+                  </span>
+                  <span className="font-display font-extrabold text-xs text-yellow-400 tracking-wider block animate-pulse">
+                    PENDING ADMIN APPROVAL
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-slate-950/50 border border-slate-800/80 rounded-xl max-w-xs mx-auto text-left space-y-1.5">
+                  <span className="text-[9px] font-mono-code text-slate-400 block uppercase font-bold text-center">Scan QR to pay verification fee (₹{verificationFee})</span>
+                  <div className="p-2 bg-white rounded-xl w-32 h-32 mx-auto flex items-center justify-center border border-cyan-500/20">
+                    <img
+                      src={appStore.state.settings?.upiQrImageUrl || 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg'}
+                      alt="UPI QR Code"
+                      className="max-w-full max-h-full object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[9px] text-slate-500 font-mono-code max-w-sm mx-auto leading-normal uppercase">
+                  Do not bypass or resubmit. The admin will verify your payment and activate your access.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveVerifyModule(null);
+                    setVerifyResult(null);
+                    setPreValidatedKeyResult(null);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white font-mono-code text-xs transition-all cursor-pointer"
+                >
+                  CLOSE &amp; EXIT
+                </button>
+              </div>
+            )}
+
+            {/* STAGE: REQUEST_REJECTED */}
+            {verificationStage === 'request_rejected' && (
+              <div className="p-5 rounded-2xl bg-[#070e1e]/90 border border-rose-500/20 text-center space-y-4 shadow-[0_0_25px_rgba(244,63,94,0.1)] animate-fade-in">
+                <div className="w-12 h-12 rounded-2xl bg-rose-950/30 border border-rose-500/40 flex items-center justify-center mx-auto text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="font-display font-black text-sm text-rose-400 tracking-widest uppercase">
+                    VERIFICATION REJECTED
+                  </h4>
+                  <p className="text-[10px] font-mono-code text-slate-300">
+                    Your verification request was rejected by the administrator.
+                  </p>
+                </div>
+
+                <div className="py-2.5 px-4 bg-slate-950/80 border border-slate-800 rounded-xl max-w-xs mx-auto space-y-0.5">
+                  <span className="text-[9px] font-mono-code text-slate-500 uppercase tracking-wider block">
+                    STATUS:
+                  </span>
+                  <span className="font-display font-extrabold text-xs text-rose-400 tracking-wider block">
+                    REJECTED
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVerificationStage('input');
+                    setVerifyResult(null);
+                    setPreValidatedKeyResult(null);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white font-mono-code text-xs transition-all cursor-pointer"
+                >
+                  TRY AGAIN / CLOSE
                 </button>
               </div>
             )}

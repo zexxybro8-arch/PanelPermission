@@ -32,6 +32,7 @@ import {
   GeneratedKeyRecord,
   VerifyKeyResult,
   UserVerificationFee,
+  VerificationRequest,
 } from '../types';
 import { storage } from './storage';
 
@@ -69,6 +70,7 @@ export interface AppStoreState {
   customerPricing: Record<string, CustomerPricing>;
   qrConfigs: QrConfig[];
   generatedKeys: GeneratedKeyRecord[];
+  verificationRequests: VerificationRequest[];
 }
 
 const STORAGE_KEY = 'aegis_defense_frontend_store_v1';
@@ -231,6 +233,17 @@ export class AppStore {
           this.notify();
         }
       }, (err) => console.warn('Firestore generatedKeys sync error:', err));
+
+      // 11. Verification Requests real-time listener
+      onSnapshot(collection(db, 'verificationRequests'), (snapshot) => {
+        const list: VerificationRequest[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as VerificationRequest);
+        });
+        this.state.verificationRequests = list;
+        this.saveToStorageOnly();
+        this.notify();
+      }, (err) => console.warn('Firestore verificationRequests sync error:', err));
 
       // Seed initial data if Firestore database is empty
       this.seedFirestoreIfEmpty();
@@ -780,6 +793,7 @@ export class AppStore {
           isTestMode: true,
         },
       ],
+      verificationRequests: [],
     };
   }
 
@@ -795,6 +809,9 @@ export class AppStore {
         }
         if (!parsed.customerPricing) {
           parsed.customerPricing = {};
+        }
+        if (!Array.isArray(parsed.verificationRequests)) {
+          parsed.verificationRequests = [];
         }
         if (!Array.isArray(parsed.qrConfigs) || parsed.qrConfigs.length === 0) {
           parsed.qrConfigs = this.getDefaultState().qrConfigs;
@@ -2842,12 +2859,17 @@ export class AppStore {
       };
     }
 
-    // Mark key record as verified and persist
-    const nowIso = new Date().toISOString();
-    matched.verified = true;
-    if (!matched.verifiedAt) {
-      matched.verifiedAt = nowIso;
+    // Check if key is already verified
+    if (!matched.verified) {
+      return {
+        valid: false,
+        message: 'VERIFICATION_REQUIRED',
+        keyRecord: matched,
+      };
     }
+
+    // Key is verified! Increment count and track last usage
+    const nowIso = new Date().toISOString();
     matched.lastVerifiedAt = nowIso;
     matched.verificationCount = (matched.verificationCount || 0) + 1;
 
@@ -2898,6 +2920,122 @@ export class AppStore {
     const idVal = found.generatedId || found.credentials?.id || found.key;
     const passVal = found.generatedPassword || found.credentials?.password || '';
     return this.verifyAccessCredentials(idVal, passVal, panelId);
+  }
+
+  public createVerificationRequest(
+    userId: string,
+    username: string,
+    panelId: string,
+    panelName: string,
+    accessId: string,
+    accessPassword: string,
+    fee: number
+  ): VerificationRequest {
+    if (!this.state.generatedKeys) {
+      this.state.generatedKeys = [];
+    }
+    // Match strictly against generated panel access credentials (ID + PASSWORD pair)
+    const matched = this.state.generatedKeys.find((rec) => {
+      const recId = (rec.generatedId || rec.credentials?.id || rec.key || '').trim().toUpperCase();
+      const targetId = accessId.trim().toUpperCase();
+      const recPass = (rec.generatedPassword || rec.credentials?.password || '').trim();
+      const targetPass = accessPassword.trim();
+      return recId === targetId && (recPass === targetPass || recPass.toUpperCase() === targetPass.toUpperCase());
+    });
+
+    if (!matched) {
+      throw new Error('INVALID ACCESS ✕ - ID or Password does not match system records.');
+    }
+
+    if (!this.state.verificationRequests) {
+      this.state.verificationRequests = [];
+    }
+
+    const existingPending = this.state.verificationRequests.find(
+      (r) => r.accessId.toUpperCase() === accessId.trim().toUpperCase() && r.status === 'PENDING'
+    );
+    if (existingPending) {
+      throw new Error('VERIFICATION REQUEST ALREADY PENDING');
+    }
+
+    const newRequest: VerificationRequest = {
+      id: `REQ-${Math.floor(100000 + Math.random() * 900000)}`,
+      userId,
+      username,
+      panelId,
+      panelName,
+      accessId: accessId.trim(),
+      accessPassword: accessPassword.trim(),
+      fee,
+      status: 'PENDING',
+      paymentStatus: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.state.verificationRequests.unshift(newRequest);
+    this.saveToStorage();
+    this.syncDocToFirestore('verificationRequests', newRequest.id, newRequest);
+    return newRequest;
+  }
+
+  public approveVerificationRequest(requestId: string, adminUsername: string): void {
+    if (!this.state.verificationRequests) {
+      this.state.verificationRequests = [];
+    }
+    const request = this.state.verificationRequests.find((r) => r.id === requestId);
+    if (!request) {
+      throw new Error('Verification request not found.');
+    }
+    if (request.status !== 'PENDING') {
+      throw new Error('Request already processed.');
+    }
+
+    request.status = 'APPROVED';
+    request.paymentStatus = 'PAID';
+    request.approvedAt = new Date().toISOString();
+    request.approvedBy = adminUsername;
+
+    // Mark the matching generated key as verified
+    if (this.state.generatedKeys) {
+      const matched = this.state.generatedKeys.find((k) => {
+        const recId = (k.generatedId || k.credentials?.id || k.key || '').trim().toUpperCase();
+        return recId === request.accessId.toUpperCase();
+      });
+      if (matched) {
+        const nowIso = new Date().toISOString();
+        matched.verified = true;
+        if (!matched.verifiedAt) {
+          matched.verifiedAt = nowIso;
+        }
+        matched.lastVerifiedAt = nowIso;
+        matched.verificationCount = (matched.verificationCount || 0) + 1;
+        this.syncDocToFirestore('generatedKeys', matched.id, matched);
+      }
+    }
+
+    this.saveToStorage();
+    this.syncDocToFirestore('verificationRequests', request.id, request);
+  }
+
+  public rejectVerificationRequest(requestId: string, adminUsername: string): void {
+    if (!this.state.verificationRequests) {
+      this.state.verificationRequests = [];
+    }
+    const request = this.state.verificationRequests.find((r) => r.id === requestId);
+    if (!request) {
+      throw new Error('Verification request not found.');
+    }
+    if (request.status !== 'PENDING') {
+      throw new Error('Request already processed.');
+    }
+
+    request.status = 'REJECTED';
+    request.paymentStatus = 'FAILED';
+    request.approvedAt = new Date().toISOString();
+    request.approvedBy = adminUsername;
+
+    this.saveToStorage();
+    this.syncDocToFirestore('verificationRequests', request.id, request);
   }
 
   public getGeneratedKeys(userId?: string, panelId?: string): GeneratedKeyRecord[] {

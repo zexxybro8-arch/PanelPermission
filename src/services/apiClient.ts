@@ -18,6 +18,7 @@ import {
   GeneratedKeyRecord,
   VerifyKeyResult,
   UserVerificationFee,
+  VerificationRequest,
 } from '../types';
 import { appStore } from '../store/appStore';
 import { storage } from '../store/storage';
@@ -402,6 +403,28 @@ export const apiClient = {
 
   async resetUserVerificationFee(userId: string): Promise<{ success: boolean; message: string }> {
     return appStore.resetUserVerificationFee(userId);
+  },
+
+  async createVerificationRequest(
+    userId: string,
+    username: string,
+    panelId: string,
+    panelName: string,
+    accessId: string,
+    accessPassword: string,
+    fee: number
+  ): Promise<VerificationRequest> {
+    return appStore.createVerificationRequest(userId, username, panelId, panelName, accessId, accessPassword, fee);
+  },
+
+  async approveVerificationRequest(requestId: string, adminUsername: string): Promise<{ success: boolean }> {
+    appStore.approveVerificationRequest(requestId, adminUsername);
+    return { success: true };
+  },
+
+  async rejectVerificationRequest(requestId: string, adminUsername: string): Promise<{ success: boolean }> {
+    appStore.rejectVerificationRequest(requestId, adminUsername);
+    return { success: true };
   },
 
   exportAppState(): string {

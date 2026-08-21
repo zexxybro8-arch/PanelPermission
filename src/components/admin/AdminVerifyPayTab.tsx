@@ -4,7 +4,7 @@ import {
   RotateCcw, Sparkles, AlertCircle, ArrowRight, Tag,
   Search, Edit3, X, Sliders, ChevronDown, Shield, Boxes, Trash2
 } from 'lucide-react';
-import { SystemSettingsData, Customer, UserVerificationFee } from '../../types';
+import { SystemSettingsData, Customer, UserVerificationFee, VerificationRequest } from '../../types';
 import { apiClient } from '../../services/apiClient';
 import { appStore } from '../../store/appStore';
 
@@ -37,6 +37,11 @@ export const AdminVerifyPayTab: React.FC<AdminVerifyPayTabProps> = ({
   // Dropdown states
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
 
+  // Verification requests state
+  const [requests, setRequests] = useState<VerificationRequest[]>([]);
+  const [requestsFilter, setRequestsFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [requestsSearch, setRequestsSearch] = useState<string>('');
+
   useEffect(() => {
     if (settings && settings.globalVerificationFee !== undefined) {
       setGlobalFeeInput(settings.globalVerificationFee);
@@ -55,6 +60,7 @@ export const AdminVerifyPayTab: React.FC<AdminVerifyPayTabProps> = ({
 
       // Sync active overrides list from store state
       syncOverridesList();
+      syncRequestsList();
     } catch (err) {
       console.error('Error fetching customers:', err);
     } finally {
@@ -68,6 +74,10 @@ export const AdminVerifyPayTab: React.FC<AdminVerifyPayTabProps> = ({
     setUserOverrides(list);
   };
 
+  const syncRequestsList = () => {
+    setRequests(appStore.state.verificationRequests || []);
+  };
+
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -76,6 +86,10 @@ export const AdminVerifyPayTab: React.FC<AdminVerifyPayTabProps> = ({
   useEffect(() => {
     syncOverridesList();
   }, [appStore.state.userVerificationFees]);
+
+  useEffect(() => {
+    syncRequestsList();
+  }, [appStore.state.verificationRequests]);
 
   const handleUpdateGlobalFee = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +167,28 @@ export const AdminVerifyPayTab: React.FC<AdminVerifyPayTabProps> = ({
     setCustomFeeInput(String(override.customFee));
     setCustomFeeEnabled(override.enabled);
     setMessage({ type: 'success', text: `EDITING OVERRIDE FOR ${override.username}` });
+  };
+
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      const adminUsername = 'SAGAR551';
+      await apiClient.approveVerificationRequest(requestId, adminUsername);
+      setMessage({ type: 'success', text: `VERIFICATION REQUEST ${requestId} SUCCESSFULLY APPROVED & CREDENTIALS ACTIVATED ✓` });
+      syncRequestsList();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'ERROR APPROVING VERIFICATION REQUEST' });
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      const adminUsername = 'SAGAR551';
+      await apiClient.rejectVerificationRequest(requestId, adminUsername);
+      setMessage({ type: 'success', text: `VERIFICATION REQUEST ${requestId} SUCCESSFULLY REJECTED ✕` });
+      syncRequestsList();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'ERROR REJECTING VERIFICATION REQUEST' });
+    }
   };
 
   // Filtering
@@ -476,6 +512,169 @@ export const AdminVerifyPayTab: React.FC<AdminVerifyPayTabProps> = ({
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* VERIFICATION REQUESTS SUBSECTION */}
+      <div className="p-5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-4 flex flex-col">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h3 className="font-display font-bold text-xs text-white tracking-wider uppercase flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-cyan-400" />
+              VERIFICATION REQUESTS DATABASE
+            </h3>
+            <span className="text-[10px] font-mono-code text-slate-500 block uppercase">
+              Approve or Reject pending access verification payment requests
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Filter Tabs */}
+            <div className="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+              {(['PENDING', 'APPROVED', 'REJECTED', 'ALL'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setRequestsFilter(filter)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-mono-code tracking-wider font-bold transition-all uppercase cursor-pointer ${
+                    requestsFilter === filter
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/25 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+
+            {/* List Search */}
+            <div className="relative max-w-xs shrink-0">
+              <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-500" />
+              <input
+                type="text"
+                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono-code text-slate-300 focus:outline-none focus:border-cyan-500/50"
+                placeholder="Search requests..."
+                value={requestsSearch}
+                onChange={(e) => setRequestsSearch(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs font-mono-code border-collapse">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
+                <th className="py-2.5 px-3">REQUEST ID</th>
+                <th className="py-2.5 px-3">CUSTOMER PROFILE</th>
+                <th className="py-2.5 px-3">CYBER PANEL</th>
+                <th className="py-2.5 px-3">ACCESS CREDENTIALS</th>
+                <th className="py-2.5 px-3">CREATED AT</th>
+                <th className="py-2.5 px-3 text-center">FEE</th>
+                <th className="py-2.5 px-3 text-center">STATUS</th>
+                <th className="py-2.5 px-3 text-right">DECISION ENGINE</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-900">
+              {requests.filter(req => {
+                if (requestsFilter !== 'ALL' && req.status !== requestsFilter) return false;
+                if (requestsSearch.trim()) {
+                  const q = requestsSearch.toLowerCase();
+                  return (
+                    req.accessId.toLowerCase().includes(q) ||
+                    req.username.toLowerCase().includes(q) ||
+                    req.panelName.toLowerCase().includes(q) ||
+                    req.id.toLowerCase().includes(q)
+                  );
+                }
+                return true;
+              }).length > 0 ? (
+                requests.filter(req => {
+                  if (requestsFilter !== 'ALL' && req.status !== requestsFilter) return false;
+                  if (requestsSearch.trim()) {
+                    const q = requestsSearch.toLowerCase();
+                    return (
+                      req.accessId.toLowerCase().includes(q) ||
+                      req.username.toLowerCase().includes(q) ||
+                      req.panelName.toLowerCase().includes(q) ||
+                      req.id.toLowerCase().includes(q)
+                    );
+                  }
+                  return true;
+                }).map((req) => (
+                  <tr key={req.id} className="hover:bg-slate-900/40 transition-colors">
+                    <td className="py-3.5 px-3 font-bold text-cyan-400">{req.id}</td>
+                    <td className="py-3.5 px-3">
+                      <div className="font-bold text-white">{req.username}</div>
+                      <span className="text-[9px] text-slate-500 block">{req.userId}</span>
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <div className="text-slate-200 font-bold">{req.panelName}</div>
+                      <span className="text-[9px] text-slate-500 block">{req.panelId}</span>
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <div className="text-emerald-400 font-bold">ID: <span className="text-slate-300 font-mono-code select-all">{req.accessId}</span></div>
+                      <div className="text-rose-400 font-bold">PASS: <span className="text-slate-400 font-mono-code select-all">{req.accessPassword}</span></div>
+                    </td>
+                    <td className="py-3.5 px-3 text-slate-400 text-[10px]">
+                      {new Date(req.createdAt).toLocaleString()}
+                    </td>
+                    <td className="py-3.5 px-3 text-center">
+                      <span className="font-extrabold text-cyan-300">₹{req.fee}</span>
+                    </td>
+                    <td className="py-3.5 px-3 text-center">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${
+                        req.status === 'PENDING'
+                          ? 'bg-yellow-950/60 text-yellow-400 border-yellow-500/30'
+                          : req.status === 'APPROVED'
+                          ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30'
+                          : 'bg-rose-950/60 text-rose-400 border-rose-500/30'
+                      }`}>
+                        {req.status}
+                      </span>
+                      {(req.status === 'APPROVED' || req.status === 'REJECTED') && (
+                        <span className="text-[8px] text-slate-500 block mt-1">
+                          BY: {req.approvedBy || 'Admin'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-3 text-right">
+                      {req.status === 'PENDING' ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApproveRequest(req.id)}
+                            className="px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>APPROVE</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectRequest(req.id)}
+                            className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>REJECT</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                          PROCESSED
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-500 text-xs uppercase">
+                    No verification requests found matching the current filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

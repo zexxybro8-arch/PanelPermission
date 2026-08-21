@@ -373,3 +373,21 @@ export interface VerifyKeyResult {
   message: string;
   keyRecord?: GeneratedKeyRecord;
 }
+
+export interface VerificationRequest {
+  id: string;
+  userId: string;
+  username: string;
+  panelId: string;
+  panelName: string;
+  accessId: string;
+  accessPassword: string;
+  fee: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  paymentStatus: 'PENDING' | 'PAID' | 'FAILED';
+  createdAt: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
+  orderId?: string | null;
+}
+
