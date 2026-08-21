@@ -350,6 +350,12 @@ export interface GeneratedKeyRecord {
   status: 'active' | 'revoked' | 'expired';
   testMode: boolean;
   isTestMode?: boolean;
+
+  // Verification tracking
+  verified?: boolean;
+  verifiedAt?: string | null;
+  lastVerifiedAt?: string | null;
+  verificationCount?: number;
 }
 
 export interface VerifyKeyResult {

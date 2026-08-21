@@ -20,6 +20,7 @@ import { AdminRuntimePlansTab } from './AdminRuntimePlansTab';
 import { AdminModulesTab } from './AdminModulesTab';
 import { AdminOrdersTab } from './AdminOrdersTab';
 import { AdminLicensesTab } from './AdminLicensesTab';
+import { AdminUsersKeysTab } from './AdminUsersKeysTab';
 import { AdminSessionsTab } from './AdminSessionsTab';
 import { AdminLogsTab } from './AdminLogsTab';
 import { AdminSettingsTab } from './AdminSettingsTab';
@@ -132,6 +133,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
     },
     { id: 'plans', label: 'RUNTIME PLANS', icon: Layers, badge: `${plans.length}` },
     { id: 'orders', label: 'ORDERS & PAYMENTS', icon: ShoppingCart, badge: `${orders.filter(o => o.paymentStatus === 'PENDING').length || ''}` },
+    { id: 'users_keys', label: 'USERS KEYS', icon: Key, highlight: true, badge: 'AUDIT' },
     { id: 'licenses', label: 'LICENSES & KEYS', icon: Key, badge: `${licenses.length}` },
     { id: 'sessions', label: 'USER SESSIONS', icon: ShieldAlert, badge: `${sessions.length}` },
     { id: 'logs', label: 'ACTIVITY AUDIT', icon: FileText },
@@ -368,6 +370,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
               <AdminOrdersTab
                 orders={orders}
                 onRefresh={fetchAllAdminData}
+              />
+            )}
+
+            {activeTab === 'users_keys' && (
+              <AdminUsersKeysTab
+                onRefreshParent={fetchAllAdminData}
               />
             )}
 

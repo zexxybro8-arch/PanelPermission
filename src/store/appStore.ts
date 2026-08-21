@@ -2629,6 +2629,10 @@ export class AppStore {
       status: 'active',
       testMode: true,
       isTestMode: true,
+      verified: false,
+      verifiedAt: null,
+      lastVerifiedAt: null,
+      verificationCount: 0,
     };
 
     // Add to generatedKeys list (unshift so latest appears first, never overwriting previous credentials)
@@ -2756,6 +2760,18 @@ export class AppStore {
         keyRecord: matched,
       };
     }
+
+    // Mark key record as verified and persist
+    const nowIso = new Date().toISOString();
+    matched.verified = true;
+    if (!matched.verifiedAt) {
+      matched.verifiedAt = nowIso;
+    }
+    matched.lastVerifiedAt = nowIso;
+    matched.verificationCount = (matched.verificationCount || 0) + 1;
+
+    this.saveToStorage();
+    this.syncDocToFirestore('generatedKeys', matched.id, matched);
 
     return {
       valid: true,
