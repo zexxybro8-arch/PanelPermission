@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Shield, User, X, Copy, CheckCircle2, Award, 
-  ShieldAlert, Calendar, Clock, MapPin, Monitor
+  ShieldAlert, Calendar, Clock, MapPin, Monitor, Key, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserProfile } from '../types';
+import { UserProfile, GeneratedKeyRecord } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
+import { apiClient } from '../services/apiClient';
 
 interface CyberHeaderProps {
   onOpenAdminLogin: () => void;
@@ -20,6 +21,37 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
   const [timeStr, setTimeStr] = useState<string>('');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [userKeys, setUserKeys] = useState<GeneratedKeyRecord[]>([]);
+  const [isLoadingKeys, setIsLoadingKeys] = useState<boolean>(false);
+  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isProfileOpen && user) {
+      setIsLoadingKeys(true);
+      const targetUserId = user.customer_id || user.id || user.username;
+      apiClient.getGeneratedKeys(targetUserId)
+        .then((keys) => {
+          setUserKeys(keys || []);
+        })
+        .catch((err) => {
+          console.warn('Failed to fetch user keys:', err);
+        })
+        .finally(() => {
+          setIsLoadingKeys(false);
+        });
+    }
+  }, [isProfileOpen, user]);
+
+  const handleCopyValue = async (val: string, recordId: string, type: 'key' | 'id' | 'password') => {
+    try {
+      await navigator.clipboard.writeText(val);
+      cyberAudio.playClick(600);
+      setCopiedKeyId(`${recordId}-${type}`);
+      setTimeout(() => setCopiedKeyId(null), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     if (isProfileOpen) {
@@ -364,6 +396,156 @@ export const CyberHeader: React.FC<CyberHeaderProps> = ({
                       <span className="truncate">{user.terminalId || 'N/A'}</span>
                     </div>
                   </div>
+                </div>
+
+                {/* GENERATED ACCESS HISTORY — MY KEYS SECTION */}
+                <div className="space-y-3 pt-4 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-300">
+                        <Key className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="font-display font-bold text-sm text-white tracking-wider uppercase">
+                        MY KEYS
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-mono-code px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30 font-bold">
+                      {userKeys.length} {userKeys.length === 1 ? 'RECORD' : 'RECORDS'}
+                    </span>
+                  </div>
+
+                  {isLoadingKeys ? (
+                    <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 flex items-center justify-center gap-2 text-slate-400 font-mono-code text-xs">
+                      <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                      <span>Loading access history...</span>
+                    </div>
+                  ) : userKeys.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800/80 text-center space-y-1.5">
+                      <div className="w-10 h-10 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+                        <Key className="w-5 h-5" />
+                      </div>
+                      <p className="font-display font-bold text-sm text-slate-300">No Keys Yet</p>
+                      <p className="text-xs font-mono-code text-slate-500 max-w-xs mx-auto">
+                        Your purchased panel access will appear here after a successful purchase.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3.5 max-h-80 overflow-y-auto pr-1">
+                      {userKeys.map((k) => {
+                        const keyVal = k.key || k.generatedId;
+                        const idVal = k.generatedId || k.credentials?.id;
+                        const passVal = k.generatedPassword || k.credentials?.password;
+                        const isKeyCopied = copiedKeyId === `${k.id}-key`;
+                        const isIdCopied = copiedKeyId === `${k.id}-id`;
+                        const isPassCopied = copiedKeyId === `${k.id}-password`;
+
+                        const isExpired = k.expiresAt && new Date(k.expiresAt) < new Date();
+                        const statusBadge = k.status === 'revoked' ? (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-rose-950 text-rose-400 border border-rose-500/30">
+                            REVOKED
+                          </span>
+                        ) : isExpired ? (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-amber-950 text-amber-400 border border-amber-500/30">
+                            EXPIRED
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/30">
+                            ACTIVE
+                          </span>
+                        );
+
+                        return (
+                          <div
+                            key={k.id}
+                            className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800/90 hover:border-cyan-500/40 transition-all space-y-3 text-left shadow-lg"
+                          >
+                            {/* Header: Logo, Panel Name, Package & Status */}
+                            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                                  <Shield className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <h5 className="font-display font-bold text-sm text-white truncate uppercase tracking-wide">
+                                    {k.panelName || 'CYBER PANEL'}
+                                  </h5>
+                                  <span className="text-[10px] font-mono-code text-cyan-300 block font-bold">
+                                    {k.duration || '30 DAYS'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="shrink-0">{statusBadge}</div>
+                            </div>
+
+                            {/* Credential Items with Separate COPY buttons */}
+                            <div className="space-y-2 font-mono-code text-xs">
+                              {/* Access ID */}
+                              <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80 flex items-center justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-[9px] text-slate-500 block uppercase font-bold">ACCESS ID</span>
+                                  <span className="font-bold text-cyan-300 text-xs break-all block select-all">
+                                    {idVal}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyValue(idVal, k.id, 'id')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono-code flex items-center gap-1 cursor-pointer shrink-0 transition-colors"
+                                >
+                                  {isIdCopied ? (
+                                    <>
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                      <span className="text-emerald-400 font-bold">Copied ✓</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3" />
+                                      <span>Copy ID</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+
+                              {/* Access Password */}
+                              <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/80 flex items-center justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-[9px] text-slate-500 block uppercase font-bold">ACCESS PASSWORD</span>
+                                  <span className="font-bold text-white text-xs break-all block select-all">
+                                    {passVal}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyValue(passVal, k.id, 'password')}
+                                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono-code flex items-center gap-1 cursor-pointer shrink-0 transition-colors"
+                                >
+                                  {isPassCopied ? (
+                                    <>
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                      <span className="text-emerald-400 font-bold">Copied ✓</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3" />
+                                      <span>Copy Password</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Purchase & Expiry dates */}
+                            <div className="flex items-center justify-between text-[10px] font-mono-code text-slate-500 pt-1 border-t border-slate-800/50">
+                              <span>PURCHASED: {new Date(k.createdAt).toLocaleDateString()}</span>
+                              <span>
+                                EXPIRES: {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : 'LIFETIME'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Close Button */}

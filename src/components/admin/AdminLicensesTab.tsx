@@ -8,16 +8,16 @@ import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminLicensesTabProps {
-  licenses: AdminLicense[];
-  users: AdminUser[];
-  modules: CyberModule[];
+  licenses?: AdminLicense[];
+  users?: AdminUser[];
+  modules?: CyberModule[];
   onRefresh: () => void;
 }
 
 export const AdminLicensesTab: React.FC<AdminLicensesTabProps> = ({
-  licenses,
-  users,
-  modules,
+  licenses = [],
+  users = [],
+  modules = [],
   onRefresh,
 }) => {
   const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
@@ -26,8 +26,8 @@ export const AdminLicensesTab: React.FC<AdminLicensesTabProps> = ({
   const [saving, setSaving] = useState(false);
 
   // New Grant Form
-  const [grantUserId, setGrantUserId] = useState(users[0]?.id || '');
-  const [grantModuleId, setGrantModuleId] = useState(modules[0]?.id || '');
+  const [grantUserId, setGrantUserId] = useState(() => (users && users[0]?.id) || '');
+  const [grantModuleId, setGrantModuleId] = useState(() => (modules && modules[0]?.id) || '');
   const [grantDuration, setGrantDuration] = useState(30);
 
   const handleGrantLicense = async (e: React.FormEvent) => {

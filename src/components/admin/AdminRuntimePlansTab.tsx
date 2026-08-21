@@ -7,17 +7,19 @@ import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminRuntimePlansTabProps {
-  plans: AdminRuntimePlan[];
+  plans?: AdminRuntimePlan[];
   onRefresh: () => void;
 }
 
 export const AdminRuntimePlansTab: React.FC<AdminRuntimePlansTabProps> = ({
-  plans,
+  plans = [],
   onRefresh,
 }) => {
   const [editingPlan, setEditingPlan] = useState<AdminRuntimePlan | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const safePlans = Array.isArray(plans) ? plans : [];
 
   const handleEditClick = (plan: AdminRuntimePlan) => {
     setEditingPlan({ ...plan });
@@ -68,7 +70,12 @@ export const AdminRuntimePlansTab: React.FC<AdminRuntimePlansTabProps> = ({
 
       {/* Plans Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {plans.map((plan) => (
+        {safePlans.length === 0 ? (
+          <div className="col-span-full p-12 text-center text-xs font-mono-code text-slate-500 bg-slate-950/40 rounded-2xl border border-slate-900">
+            No runtime plans found.
+          </div>
+        ) : (
+          safePlans.map((plan) => (
           <div
             key={plan.id}
             className="p-5 rounded-2xl bg-slate-950/90 border border-slate-800/90 shadow-lg space-y-4 relative overflow-hidden"
@@ -117,7 +124,7 @@ export const AdminRuntimePlansTab: React.FC<AdminRuntimePlansTabProps> = ({
               </button>
             </div>
           </div>
-        ))}
+        )))}
       </div>
 
       {/* Edit Plan Modal */}

@@ -1,7 +1,8 @@
+import { AdminQrManagementTab } from "./AdminQrManagementTab";
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Users, DollarSign, Layers, Boxes, 
-  ShoppingCart, Key, ShieldAlert, FileText, Settings, 
+  ShoppingCart, Key, ShieldAlert, FileText, Settings, QrCode, 
   LogOut, ExternalLink, ShieldCheck, RefreshCw, Menu, X, ChevronRight
 } from 'lucide-react';
 import { 
@@ -23,6 +24,7 @@ import { AdminSessionsTab } from './AdminSessionsTab';
 import { AdminLogsTab } from './AdminLogsTab';
 import { AdminSettingsTab } from './AdminSettingsTab';
 import { AdminLoginModal } from './AdminLoginModal';
+import { AdminErrorBoundary } from './AdminErrorBoundary';
 
 interface AdminPortalProps {
   onBackToPortal: () => void;
@@ -112,6 +114,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
       badge: 'PRO' 
     },
     { id: 'modules', label: 'ACCESS PANELS', icon: Boxes, highlight: true, badge: `${modules.length}` },
+    { 
+      id: 'qr_management', 
+      label: 'QR MANAGEMENT', 
+      icon: QrCode, 
+      highlight: true, 
+      badge: 'DYNAMIC' 
+    },
     { id: 'overview', label: 'OVERVIEW', icon: LayoutDashboard },
     { id: 'users', label: 'USER DIRECTORY', icon: Users, badge: `${users.length}` },
     { 
@@ -303,88 +312,95 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
 
         {/* Content Canvas */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          {activeTab === 'customers' && (
-            <AdminCustomerManagementTab
-              onRefreshParent={fetchAllAdminData}
-            />
-          )}
+          <AdminErrorBoundary fallbackTitle="ADMIN PORTAL ERROR" onReset={fetchAllAdminData}>
+            {activeTab === 'customers' && (
+              <AdminCustomerManagementTab
+                onRefreshParent={fetchAllAdminData}
+              />
+            )}
 
-          {activeTab === 'overview' && (
-            <AdminOverviewTab
-              stats={stats}
-              recentOrders={orders.slice(0, 5)}
-              recentLogs={logs.slice(0, 5)}
-              loading={loading}
-              onRefresh={fetchAllAdminData}
-              onNavigateTab={(tab) => setActiveTab(tab)}
-            />
-          )}
+            {activeTab === 'overview' && (
+              <AdminOverviewTab
+                stats={stats}
+                recentOrders={orders.slice(0, 5)}
+                recentLogs={logs.slice(0, 5)}
+                loading={loading}
+                onRefresh={fetchAllAdminData}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+              />
+            )}
 
-          {activeTab === 'users' && (
-            <AdminUsersTab
-              users={users}
-              onRefresh={fetchAllAdminData}
-              onSelectUserForPricing={handleSelectUserForPricing}
-            />
-          )}
+            {activeTab === 'users' && (
+              <AdminUsersTab
+                users={users}
+                onRefresh={fetchAllAdminData}
+                onSelectUserForPricing={handleSelectUserForPricing}
+              />
+            )}
 
-          {activeTab === 'pricing' && (
-            <AdminUserPricingTab
-              users={users}
-              onPricingUpdated={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'qr_management' && (
+              <AdminQrManagementTab
+              />
+            )}
 
-          {activeTab === 'plans' && (
-            <AdminRuntimePlansTab
-              plans={plans}
-              onRefresh={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'pricing' && (
+              <AdminUserPricingTab
+                users={users}
+                onPricingUpdated={fetchAllAdminData}
+              />
+            )}
 
-          {activeTab === 'modules' && (
-            <AdminModulesTab
-              modules={modules}
-              onRefresh={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'plans' && (
+              <AdminRuntimePlansTab
+                plans={plans}
+                onRefresh={fetchAllAdminData}
+              />
+            )}
 
-          {activeTab === 'orders' && (
-            <AdminOrdersTab
-              orders={orders}
-              onRefresh={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'modules' && (
+              <AdminModulesTab
+                modules={modules}
+                onRefresh={fetchAllAdminData}
+              />
+            )}
 
-          {activeTab === 'licenses' && (
-            <AdminLicensesTab
-              licenses={licenses}
-              users={users}
-              modules={modules}
-              onRefresh={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'orders' && (
+              <AdminOrdersTab
+                orders={orders}
+                onRefresh={fetchAllAdminData}
+              />
+            )}
 
-          {activeTab === 'sessions' && (
-            <AdminSessionsTab
-              sessions={sessions}
-              onRefresh={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'licenses' && (
+              <AdminLicensesTab
+                licenses={licenses}
+                users={users}
+                modules={modules}
+                onRefresh={fetchAllAdminData}
+              />
+            )}
 
-          {activeTab === 'logs' && (
-            <AdminLogsTab
-              logs={logs}
-              onRefresh={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'sessions' && (
+              <AdminSessionsTab
+                sessions={sessions}
+                onRefresh={fetchAllAdminData}
+              />
+            )}
 
-          {activeTab === 'settings' && (
-            <AdminSettingsTab
-              settings={settings}
-              onRefresh={fetchAllAdminData}
-            />
-          )}
+            {activeTab === 'logs' && (
+              <AdminLogsTab
+                logs={logs}
+                onRefresh={fetchAllAdminData}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <AdminSettingsTab
+                settings={settings}
+                onRefresh={fetchAllAdminData}
+              />
+            )}
+          </AdminErrorBoundary>
         </main>
       </div>
     </div>

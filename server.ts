@@ -31,6 +31,37 @@ interface StoredCustomer {
   updated_at: string;
 }
 
+interface PanelDownloadFile {
+  id: string;
+  panelId: string;
+  title: string;
+  downloadUrl: string;
+  description?: string;
+  version?: string;
+  fileSize?: string;
+  orderIndex?: number;
+  createdAt?: string;
+}
+
+interface PanelSetupStep {
+  id: string;
+  stepNumber: number;
+  title: string;
+  description: string;
+}
+
+interface PanelSetupContent {
+  panelId: string;
+  enabled?: boolean;
+  videoUrl?: string;
+  videoTitle?: string;
+  instructions?: string;
+  steps?: PanelSetupStep[];
+  importantNotes?: string[];
+  imageUrl?: string;
+  updatedAt?: string;
+}
+
 interface StoredPanel {
   id: string;
   name: string;
@@ -44,6 +75,10 @@ interface StoredPanel {
   imageUrl?: string;
   requiredRuntime?: string;
   orderIndex?: number;
+  filesEnabled?: boolean;
+  setupEnabled?: boolean;
+  files?: PanelDownloadFile[];
+  setup?: PanelSetupContent;
 }
 
 interface ServerDatabase {
@@ -1117,6 +1152,10 @@ async function startServer() {
     if (icon) current.icon = icon;
     if (typeof imageUrl !== 'undefined') current.imageUrl = imageUrl.toString().trim();
     if (requiredRuntime) current.requiredRuntime = requiredRuntime.toString().trim();
+    if (typeof req.body.filesEnabled !== 'undefined') current.filesEnabled = Boolean(req.body.filesEnabled);
+    if (typeof req.body.setupEnabled !== 'undefined') current.setupEnabled = Boolean(req.body.setupEnabled);
+    if (Array.isArray(req.body.files)) current.files = req.body.files;
+    if (req.body.setup) current.setup = req.body.setup;
 
     db.modules[panelIdx] = current;
 
@@ -1228,6 +1267,116 @@ async function startServer() {
     return res.json({
       success: true,
       message: "Panel permanently deleted.",
+    });
+  });
+
+  // GET Panel Content (Files and Setup)
+  app.get(["/api/admin/modules/:id/content", "/api/admin/panels/:id/content", "/api/portal/panels/:id/content"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const panel = db.modules.find(m => m.id === id);
+
+    if (!panel) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    const filesEnabled = panel.filesEnabled !== false;
+    const setupEnabled = panel.setupEnabled !== false;
+    const files = Array.isArray(panel.files) ? panel.files : [];
+    const setup = panel.setup || {
+      panelId: id,
+      enabled: setupEnabled,
+      videoUrl: '',
+      videoTitle: '',
+      instructions: '',
+      steps: [],
+      importantNotes: [],
+      imageUrl: '',
+    };
+
+    return res.json({
+      success: true,
+      panelId: id,
+      panelName: panel.name,
+      filesEnabled,
+      setupEnabled,
+      files,
+      setup: {
+        ...setup,
+        panelId: id,
+      },
+    });
+  });
+
+  // PUT / POST Update Panel Content
+  app.put(["/api/admin/modules/:id/content", "/api/admin/panels/:id/content"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const panelIdx = db.modules.findIndex(m => m.id === id);
+
+    if (panelIdx === -1) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    const panel = db.modules[panelIdx];
+    const { filesEnabled, setupEnabled, files, setup } = req.body;
+
+    if (typeof filesEnabled !== 'undefined') panel.filesEnabled = Boolean(filesEnabled);
+    if (typeof setupEnabled !== 'undefined') panel.setupEnabled = Boolean(setupEnabled);
+    if (Array.isArray(files)) panel.files = files;
+    if (setup) panel.setup = { ...setup, panelId: id };
+
+    db.modules[panelIdx] = panel;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: `Content updated successfully for "${panel.name}".`,
+      module: panel,
+      panel,
+    });
+  });
+
+  // Toggle Files button for a panel
+  app.post(["/api/admin/modules/:id/files/toggle", "/api/admin/panels/:id/files/toggle"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const panel = db.modules.find(m => m.id === id);
+
+    if (!panel) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    panel.filesEnabled = !(panel.filesEnabled !== false);
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: `Files access for "${panel.name}" is now ${panel.filesEnabled ? 'ENABLED' : 'DISABLED'}.`,
+      filesEnabled: panel.filesEnabled,
+    });
+  });
+
+  // Toggle Setup button for a panel
+  app.post(["/api/admin/modules/:id/setup/toggle", "/api/admin/panels/:id/setup/toggle"], (req, res) => {
+    db = loadDatabase();
+    const { id } = req.params;
+    const panel = db.modules.find(m => m.id === id);
+
+    if (!panel) {
+      return res.status(404).json({ success: false, message: "Panel not found." });
+    }
+
+    panel.setupEnabled = !(panel.setupEnabled !== false);
+    if (panel.setup) {
+      panel.setup.enabled = panel.setupEnabled;
+    }
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: `Setup access for "${panel.name}" is now ${panel.setupEnabled ? 'ENABLED' : 'DISABLED'}.`,
+      setupEnabled: panel.setupEnabled,
     });
   });
 

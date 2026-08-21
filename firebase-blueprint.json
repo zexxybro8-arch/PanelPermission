@@ -111,6 +111,18 @@
         "admin_upi_id": { "type": "string", "description": "Admin UPI ID" },
         "auto_approve_orders": { "type": "boolean", "description": "Auto approve orders" }
       }
+    },
+    "qr_configs": {
+      "fields": {
+        "id": { "type": "string", "description": "Unique QR config ID" },
+        "panel_id": { "type": "string", "description": "Panel ID" },
+        "duration": { "type": "string", "description": "15Days, 20Days, 30Days, or permanent" },
+        "customer_id": { "type": "string", "description": "Optional Customer ID for override" },
+        "price": { "type": "number", "description": "Optional reference price" },
+        "qr_image_url": { "type": "string", "description": "QR image URL or base64 data" },
+        "enabled": { "type": "boolean", "description": "Whether this QR code is active" },
+        "updated_at": { "type": "string", "description": "Timestamp string" }
+      }
     }
   }
 }

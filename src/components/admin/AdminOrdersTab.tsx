@@ -8,24 +8,28 @@ import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminOrdersTabProps {
-  orders: AdminOrder[];
+  orders?: AdminOrder[];
   onRefresh: () => void;
 }
 
 export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
-  orders,
+  orders = [],
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
-  const filteredOrders = orders.filter((ord) => {
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
+  const filteredOrders = safeOrders.filter((ord) => {
+    if (!ord) return false;
+    const searchLower = (searchTerm || '').toLowerCase();
     const matchesSearch =
-      ord.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ord.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ord.moduleName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ord.transactionRef.toLowerCase().includes(searchTerm.toLowerCase());
+      (ord.id || '').toLowerCase().includes(searchLower) ||
+      (ord.username || '').toLowerCase().includes(searchLower) ||
+      (ord.moduleName || '').toLowerCase().includes(searchLower) ||
+      (ord.transactionRef || '').toLowerCase().includes(searchLower);
 
     const matchesStatus = statusFilter === 'ALL' || ord.paymentStatus === statusFilter;
     return matchesSearch && matchesStatus;

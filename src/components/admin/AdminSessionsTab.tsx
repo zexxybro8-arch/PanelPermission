@@ -8,16 +8,18 @@ import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminSessionsTabProps {
-  sessions: AdminSession[];
+  sessions?: AdminSession[];
   onRefresh: () => void;
 }
 
 export const AdminSessionsTab: React.FC<AdminSessionsTabProps> = ({
-  sessions,
+  sessions = [],
   onRefresh,
 }) => {
   const [loadingToken, setLoadingToken] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
+
+  const safeSessions = Array.isArray(sessions) ? sessions : [];
 
   const handleRevokeSession = async (token: string, username: string) => {
     if (!window.confirm(`Revoke active token for operator ${username}?`)) return;
@@ -68,7 +70,7 @@ export const AdminSessionsTab: React.FC<AdminSessionsTabProps> = ({
           <button
             type="button"
             onClick={handleRevokeAll}
-            disabled={revokingAll || sessions.length === 0}
+            disabled={revokingAll || safeSessions.length === 0}
             className="px-4 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-300 font-display font-bold text-xs tracking-wider flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
           >
             <AlertTriangle className="w-4 h-4 text-rose-400" />
@@ -79,28 +81,28 @@ export const AdminSessionsTab: React.FC<AdminSessionsTabProps> = ({
 
       {/* Sessions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sessions.length === 0 ? (
+        {safeSessions.length === 0 ? (
           <div className="col-span-full p-12 text-center text-xs font-mono-code text-slate-500 bg-slate-950/40 rounded-2xl border border-slate-900">
             No external active device sessions currently registered.
           </div>
         ) : (
-          sessions.map((sess) => (
+          safeSessions.map((sess) => (
             <div
-              key={sess.id}
+              key={sess.id || sess.token || Math.random().toString()}
               className="p-5 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-lg space-y-3 relative overflow-hidden"
             >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-display font-bold text-sm text-white tracking-wider">
-                      {sess.username}
+                      {sess.username || 'UNKNOWN_OPERATOR'}
                     </span>
                     <span className="px-1.5 py-0.2 rounded text-[9px] font-mono-code font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/30">
-                      LVL {sess.clearanceLevel}
+                      LVL {sess.clearanceLevel ?? 1}
                     </span>
                   </div>
                   <span className="text-[10px] font-mono-code text-slate-500 block">
-                    ID: {sess.userId}
+                    ID: {sess.userId || 'N/A'}
                   </span>
                 </div>
 
@@ -110,15 +112,15 @@ export const AdminSessionsTab: React.FC<AdminSessionsTabProps> = ({
               <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1 text-xs font-mono-code text-slate-400">
                 <div className="flex items-center gap-2 text-slate-300">
                   <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                  <span className="truncate">{sess.ipAddress}</span>
+                  <span className="truncate">{sess.ipAddress || '127.0.0.1 (Local)'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-400">
                   <Laptop className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{sess.userAgent}</span>
+                  <span className="truncate">{sess.userAgent || 'CyberGate Client Agent'}</span>
                 </div>
                 <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-800 flex items-center justify-between">
-                  <span>Token: {sess.token.substring(0, 14)}...</span>
-                  <span>{new Date(sess.createdAt).toLocaleTimeString()}</span>
+                  <span>Token: {sess.token ? sess.token.substring(0, 14) + '...' : 'SECURE_TOKEN'}</span>
+                  <span>{sess.createdAt ? new Date(sess.createdAt).toLocaleTimeString() : 'LIVE'}</span>
                 </div>
               </div>
 
@@ -126,7 +128,7 @@ export const AdminSessionsTab: React.FC<AdminSessionsTabProps> = ({
                 <button
                   type="button"
                   disabled={loadingToken === sess.token}
-                  onClick={() => handleRevokeSession(sess.token, sess.username)}
+                  onClick={() => handleRevokeSession(sess.token || '', sess.username || 'operator')}
                   className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-rose-950 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-300 text-xs font-mono-code flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <Power className="w-3.5 h-3.5 text-rose-400" />

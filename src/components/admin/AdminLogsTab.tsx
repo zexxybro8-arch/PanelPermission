@@ -6,25 +6,29 @@ import {
 import { AdminActivityLog } from '../../types';
 
 interface AdminLogsTabProps {
-  logs: AdminActivityLog[];
+  logs?: AdminActivityLog[];
   onRefresh: () => void;
 }
 
 export const AdminLogsTab: React.FC<AdminLogsTabProps> = ({
-  logs,
+  logs = [],
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
 
-  const filteredLogs = logs.filter((l) => {
-    const matchesSearch =
-      l.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.adminId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.targetResource.toLowerCase().includes(searchTerm.toLowerCase());
+  const safeLogs = Array.isArray(logs) ? logs : [];
 
-    const matchesAction = filterAction === 'ALL' || l.action.startsWith(filterAction);
+  const filteredLogs = safeLogs.filter((l) => {
+    if (!l) return false;
+    const searchLower = (searchTerm || '').toLowerCase();
+    const matchesSearch =
+      (l.action || '').toLowerCase().includes(searchLower) ||
+      (l.details || '').toLowerCase().includes(searchLower) ||
+      (l.adminId || '').toLowerCase().includes(searchLower) ||
+      (l.targetResource || '').toLowerCase().includes(searchLower);
+
+    const matchesAction = filterAction === 'ALL' || (l.action && l.action.startsWith(filterAction));
     return matchesSearch && matchesAction;
   });
 

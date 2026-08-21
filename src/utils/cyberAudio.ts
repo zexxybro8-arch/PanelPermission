@@ -118,6 +118,10 @@ class CyberAudioEngine {
     }
   }
 
+  public playSuccess() {
+    this.playAccessGranted();
+  }
+
   // Access Denied / Error double buzz
   public playError() {
     const ctx = this.getContext();

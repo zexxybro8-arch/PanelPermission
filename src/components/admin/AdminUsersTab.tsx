@@ -10,13 +10,13 @@ import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
 
 interface AdminUsersTabProps {
-  users: AdminUser[];
+  users?: AdminUser[];
   onRefresh: () => void;
   onSelectUserForPricing: (userId: string) => void;
 }
 
 export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
-  users,
+  users = [],
   onRefresh,
   onSelectUserForPricing,
 }) => {
@@ -61,11 +61,17 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   const [copiedId, setCopiedId] = useState(false);
   const [copiedPassKey, setCopiedPassKey] = useState(false);
 
-  const filteredUsers = users.filter((u) =>
-    u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const safeUsers = Array.isArray(users) ? users : [];
+
+  const filteredUsers = safeUsers.filter((u) => {
+    if (!u) return false;
+    const searchLower = (searchTerm || '').toLowerCase();
+    return (
+      (u.username || '').toLowerCase().includes(searchLower) ||
+      (u.id || '').toLowerCase().includes(searchLower) ||
+      (u.email ? u.email.toLowerCase().includes(searchLower) : false)
+    );
+  });
 
   const generateRandomCredentials = async () => {
     try {

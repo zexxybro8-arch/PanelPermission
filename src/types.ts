@@ -1,5 +1,37 @@
 export type AuthTab = 'credentials';
 
+export interface PanelDownloadFile {
+  id: string;
+  panelId: string;
+  title: string;
+  downloadUrl: string;
+  description?: string;
+  version?: string;
+  fileSize?: string;
+  orderIndex?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PanelSetupStep {
+  id: string;
+  stepNumber: number;
+  title: string;
+  description: string;
+}
+
+export interface PanelSetupContent {
+  panelId: string;
+  enabled: boolean;
+  videoUrl?: string;
+  videoTitle?: string;
+  instructions?: string;
+  steps: PanelSetupStep[];
+  importantNotes?: string[];
+  imageUrl?: string;
+  updatedAt?: string;
+}
+
 export interface CyberModule {
   id: string;
   name: string;
@@ -15,6 +47,10 @@ export interface CyberModule {
   orderIndex?: number;
   assignedCustomers?: Array<{ id: string; customer_id: string; username: string }>;
   assignedCustomerIds?: string[];
+  filesEnabled?: boolean;
+  setupEnabled?: boolean;
+  files?: PanelDownloadFile[];
+  setup?: PanelSetupContent;
 }
 
 export interface PanelPermissionState {
@@ -272,3 +308,52 @@ export type CustomerPricing = Record<string, {
   "permanent": number | null;
 }>;
 
+
+// ==========================================
+// QR MANAGEMENT ENTITIES
+// ==========================================
+export interface QrConfig {
+  id: string; // unique ID
+  panelId: string;
+  duration: '15Days' | '20Days' | '30Days' | 'permanent';
+  customerId?: string; // Optional: If specific to a customer
+  price?: number;
+  qrImageUrl: string;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+// ==========================================
+// GENERATED KEYS & CREDENTIALS ENTITIES
+// ==========================================
+export interface GeneratedKeyCredentials {
+  id: string; // Generated Access ID (e.g. AG-7K4P9X2M)
+  password: string; // Generated Access Password (e.g. Q8N4-LP7Z-2X)
+}
+
+export interface GeneratedKeyRecord {
+  id: string;
+  credentialId?: string;
+  key: string;
+  userId: string;
+  username: string;
+  panelId: string;
+  panelName: string;
+  orderId: string;
+  generatedId: string; // Unique generated panel ID (e.g. AG-7K4P9X2M)
+  generatedPassword: string; // Unique generated panel password (e.g. Q8N4-LP7Z-2X)
+  duration: string;
+  durationDays: number;
+  credentials: GeneratedKeyCredentials;
+  createdAt: string;
+  expiresAt: string | null;
+  status: 'active' | 'revoked' | 'expired';
+  testMode: boolean;
+  isTestMode?: boolean;
+}
+
+export interface VerifyKeyResult {
+  valid: boolean;
+  message: string;
+  keyRecord?: GeneratedKeyRecord;
+}

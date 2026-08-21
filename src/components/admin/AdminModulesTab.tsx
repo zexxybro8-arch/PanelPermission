@@ -3,16 +3,17 @@ import {
   Boxes, Plus, Edit3, Trash2, Power, Zap, Flame, Cpu, 
   Activity, Droplets, Crosshair, EyeOff, X, Check, AlertTriangle, 
   Search, Shield, DollarSign, Image as ImageIcon, Users, UserCheck,
-  ExternalLink, Sparkles, Upload
+  ExternalLink, Sparkles, Upload, FileText, Settings
 } from 'lucide-react';
 import { CyberModule, Customer } from '../../types';
 import { apiClient } from '../../services/apiClient';
 import { extractErrorMessage } from '../../utils/errorMessage';
 import { compressImage } from '../../utils/imageCompressor';
 import { appStore } from '../../store/appStore';
+import { AdminPanelContentModal } from './AdminPanelContentModal';
 
 interface AdminModulesTabProps {
-  modules: CyberModule[];
+  modules?: CyberModule[];
   onRefresh: () => void;
 }
 
@@ -29,7 +30,7 @@ const ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: string }
 };
 
 export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
-  modules,
+  modules = [],
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,9 +42,29 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
   const [editingModule, setEditingModule] = useState<CyberModule | null>(null);
   const [assigningModule, setAssigningModule] = useState<CyberModule | null>(null);
   const [deletingModule, setDeletingModule] = useState<CyberModule | null>(null);
+  const [contentModule, setContentModule] = useState<CyberModule | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [imageErrorMap, setImageErrorMap] = useState<Record<string, boolean>>({});
+
+  // Quick toggle handlers for Files and Setup
+  const handleToggleFiles = async (mod: CyberModule) => {
+    try {
+      await apiClient.togglePanelFiles(mod.id);
+      onRefresh();
+    } catch (err: any) {
+      setError(extractErrorMessage(err));
+    }
+  };
+
+  const handleToggleSetup = async (mod: CyberModule) => {
+    try {
+      await apiClient.togglePanelSetup(mod.id);
+      onRefresh();
+    } catch (err: any) {
+      setError(extractErrorMessage(err));
+    }
+  };
 
   // New Panel Form State
   const [newId, setNewId] = useState('');
@@ -234,13 +255,23 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
     }
   };
 
+  // Safe Modules Array
+  const safeModules = Array.isArray(modules) ? modules : [];
+
   // Filtered Panels
-  const filteredModules = modules.filter((mod) => {
+  const filteredModules = safeModules.filter((mod) => {
+    if (!mod) return false;
+    const nameStr = (mod.name || '').toLowerCase();
+    const idStr = (mod.id || '').toLowerCase();
+    const tagStr = (mod.tag || '').toLowerCase();
+    const descStr = (mod.description || '').toLowerCase();
+    const searchLower = (searchTerm || '').toLowerCase();
+
     const matchesSearch = 
-      mod.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mod.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mod.tag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mod.description.toLowerCase().includes(searchTerm.toLowerCase());
+      nameStr.includes(searchLower) ||
+      idStr.includes(searchLower) ||
+      tagStr.includes(searchLower) ||
+      descStr.includes(searchLower);
 
     const isModActive = mod.status === 'active' || (mod.enabled !== false && mod.status !== 'inactive');
     const matchesStatus = 
@@ -265,7 +296,7 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
                 ACCESS PANEL MANAGEMENT
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40">
-                {modules.length} TOTAL PANELS
+                {safeModules.length} TOTAL PANELS
               </span>
             </div>
             <span className="text-xs font-mono-code text-slate-400">
@@ -409,6 +440,50 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
                     {mod.description}
                   </p>
 
+                  {/* Files & Setup Status & Manager Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-900 text-[11px] font-mono-code">
+                    <div className="flex items-center gap-1.5">
+                      {/* Quick Toggle Files */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleFiles(mod)}
+                        className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                          mod.filesEnabled !== false
+                            ? 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300 hover:bg-cyan-900'
+                            : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                        }`}
+                        title={mod.filesEnabled !== false ? 'Files button is ON. Click to toggle.' : 'Files button is OFF. Click to toggle.'}
+                      >
+                        <FileText className="w-3 h-3" />
+                        <span>FILES: {mod.filesEnabled !== false ? 'ON' : 'OFF'}</span>
+                      </button>
+
+                      {/* Quick Toggle Setup */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSetup(mod)}
+                        className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                          mod.setupEnabled !== false
+                            ? 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300 hover:bg-cyan-900'
+                            : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                        }`}
+                        title={mod.setupEnabled !== false ? 'Setup button is ON. Click to toggle.' : 'Setup button is OFF. Click to toggle.'}
+                      >
+                        <Settings className="w-3 h-3" />
+                        <span>SETUP: {mod.setupEnabled !== false ? 'ON' : 'OFF'}</span>
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setContentModule(mod)}
+                      className="px-2 py-0.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-[10px] font-bold hover:border-cyan-300 transition-all flex items-center gap-1 cursor-pointer"
+                      title="Manage Files and Setup Guide for this panel"
+                    >
+                      <span>CONFIG FILES/SETUP</span>
+                    </button>
+                  </div>
+
                   {/* Assigned Customers Pill */}
                   <div className="flex items-center justify-between text-[11px] font-mono-code pt-2 border-t border-slate-900">
                     <span className="text-slate-400 flex items-center gap-1.5">
@@ -438,6 +513,15 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
                   </span>
 
                   <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setContentModule(mod)}
+                      className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 hover:text-white transition-colors cursor-pointer"
+                      title="Manage Files & Setup Content"
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setPricingModule(mod)}
@@ -1151,6 +1235,20 @@ export const AdminModulesTab: React.FC<AdminModulesTabProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* PANEL FILES & SETUP CONTENT MANAGER MODAL */}
+      {/* ======================================================== */}
+      {contentModule && (
+        <AdminPanelContentModal
+          panel={contentModule}
+          onClose={() => setContentModule(null)}
+          onSaved={() => {
+            setContentModule(null);
+            onRefresh();
+          }}
+        />
       )}
     </div>
   );

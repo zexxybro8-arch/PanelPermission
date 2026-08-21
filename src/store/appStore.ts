@@ -25,6 +25,12 @@ import {
   CreatedCustomerResult,
   PanelPricing,
   CustomerPricing,
+  QrConfig,
+  PanelDownloadFile,
+  PanelSetupStep,
+  PanelSetupContent,
+  GeneratedKeyRecord,
+  VerifyKeyResult,
 } from '../types';
 import { storage } from './storage';
 
@@ -59,6 +65,8 @@ export interface AppStoreState {
   settings: SystemSettingsData;
   panelPricing: Record<string, PanelPricing>;
   customerPricing: Record<string, CustomerPricing>;
+  qrConfigs: QrConfig[];
+  generatedKeys: GeneratedKeyRecord[];
 }
 
 const STORAGE_KEY = 'aegis_defense_frontend_store_v1';
@@ -86,6 +94,19 @@ export class AppStore {
           this.notify();
         }
       }, (err) => console.warn('Firestore customers sync error:', err));
+
+      // QR Configs real-time listener
+      onSnapshot(collection(db, 'qrConfigs'), (snapshot) => {
+        const list: QrConfig[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as QrConfig);
+        });
+        if (list.length > 0) {
+          this.state.qrConfigs = list;
+          this.saveToStorageOnly();
+          this.notify();
+        }
+      }, (err) => console.warn('Firestore qrConfigs sync error:', err));
 
       // 2. Modules / Panels real-time listener
       onSnapshot(collection(db, 'modules'), (snapshot) => {
@@ -182,6 +203,19 @@ export class AppStore {
         this.notify();
       }, (err) => console.warn('Firestore customerPricing sync error:', err));
 
+      // 10. Generated Keys real-time listener
+      onSnapshot(collection(db, 'generatedKeys'), (snapshot) => {
+        const list: GeneratedKeyRecord[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push(docSnap.data() as GeneratedKeyRecord);
+        });
+        if (list.length > 0) {
+          this.state.generatedKeys = list;
+          this.saveToStorageOnly();
+          this.notify();
+        }
+      }, (err) => console.warn('Firestore generatedKeys sync error:', err));
+
       // Seed initial data if Firestore database is empty
       this.seedFirestoreIfEmpty();
     } catch (err) {
@@ -222,6 +256,13 @@ export class AppStore {
       const settingsSnap = await getDocs(collection(db, 'settings'));
       if (settingsSnap.empty) {
         await this.syncDocToFirestore('settings', 'global', this.state.settings);
+      }
+
+      const qrSnap = await getDocs(collection(db, 'qrConfigs'));
+      if (qrSnap.empty && this.state.qrConfigs && this.state.qrConfigs.length > 0) {
+        for (const q of this.state.qrConfigs) {
+          await this.syncDocToFirestore('qrConfigs', q.id, q);
+        }
       }
     } catch (err) {
       console.warn('Failed seeding Firestore:', err);
@@ -394,6 +435,71 @@ export class AppStore {
           enabled: true,
           requiredRuntime: 'Standard Cyber Runtime (15-30 Days or Perm)',
           orderIndex: 1,
+          filesEnabled: true,
+          setupEnabled: true,
+          files: [
+            {
+              id: 'file-aegis-core',
+              panelId: 'MOD-AEGIS-SENTINEL',
+              title: 'Aegis_Sentinel_Core_v4.8.2_x64.zip',
+              downloadUrl: 'https://downloads.aegis-security.internal/releases/aegis_core_v4.8.2.zip',
+              description: 'Complete runtime binaries, neural kernel bypass driver, and telemetry interceptor.',
+              version: 'v4.8.2-PRO',
+              fileSize: '24.8 MB',
+              orderIndex: 1,
+              createdAt: now,
+            },
+            {
+              id: 'file-aegis-config',
+              panelId: 'MOD-AEGIS-SENTINEL',
+              title: 'config_sentinel_policy.json',
+              downloadUrl: 'https://downloads.aegis-security.internal/configs/default_sentinel_policy.json',
+              description: 'Pre-tuned low latency heuristic rules and zero-trust perimeter configuration.',
+              version: 'v4.8.0',
+              fileSize: '18 KB',
+              orderIndex: 2,
+              createdAt: now,
+            },
+          ],
+          setup: {
+            panelId: 'MOD-AEGIS-SENTINEL',
+            enabled: true,
+            videoTitle: 'Aegis Quantum Sentinel: Complete Installation & Bypass Guide',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            instructions: 'Follow these step-by-step instructions to initialize the Aegis Quantum Sentinel client on 64-bit operating systems with full administrative clearance.',
+            steps: [
+              {
+                id: 'step-1',
+                stepNumber: 1,
+                title: 'Download & Extract Binaries',
+                description: 'Download the Aegis_Sentinel_Core ZIP file from the FILES section and extract it to a clean root directory (e.g., C:\\AegisSentinel).',
+              },
+              {
+                id: 'step-2',
+                stepNumber: 2,
+                title: 'Configure Antivirus Whitelist',
+                description: 'Add the extracted folder to your security suite exclusions to prevent heuristic false-positives on the kernel driver.',
+              },
+              {
+                id: 'step-3',
+                stepNumber: 3,
+                title: 'Execute as Administrator',
+                description: 'Right click SentinelLauncher.exe and choose "Run as Administrator". Enter your Authorised Access ID and cryptographic passkey when prompted.',
+              },
+              {
+                id: 'step-4',
+                stepNumber: 4,
+                title: 'Verify Quantum Telemetry Stream',
+                description: 'Ensure the terminal displays "HANDSHAKE // 100% OK" and the green status LED pulses in the system tray.',
+              },
+            ],
+            importantNotes: [
+              'Requires Windows 10/11 x64 (Build 19041 or higher).',
+              'Disable Hyper-V / Core Isolation (VBS) if encountering driver initialization code 0xC0000005.',
+              'Never share your runtime authorization token or license keys.',
+            ],
+            updatedAt: now,
+          },
         },
         {
           id: 'MOD-SPECTRE-FIREWALL',
@@ -405,6 +511,53 @@ export class AppStore {
           enabled: true,
           requiredRuntime: 'Standard Cyber Runtime (15-30 Days or Perm)',
           orderIndex: 2,
+          filesEnabled: true,
+          setupEnabled: true,
+          files: [
+            {
+              id: 'file-spectre-driver',
+              panelId: 'MOD-SPECTRE-FIREWALL',
+              title: 'Spectre_L7_Firewall_Package_v3.1.msi',
+              downloadUrl: 'https://downloads.aegis-security.internal/releases/spectre_l7_installer.msi',
+              description: 'Production network filter driver with high-throughput packet filtering.',
+              version: 'v3.1.0-ELITE',
+              fileSize: '16.4 MB',
+              orderIndex: 1,
+              createdAt: now,
+            },
+          ],
+          setup: {
+            panelId: 'MOD-SPECTRE-FIREWALL',
+            enabled: true,
+            videoTitle: 'Spectre L7 Firewall: Network Setup & Rule Orchestration',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            instructions: 'Setup protocol for deploying the Spectre Layer-7 Shield onto edge routing interfaces.',
+            steps: [
+              {
+                id: 'step-s1',
+                stepNumber: 1,
+                title: 'Install L7 Network Filter Driver',
+                description: 'Run the MSI installer and approve the WFP (Windows Filtering Platform) network driver hook.',
+              },
+              {
+                id: 'step-s2',
+                stepNumber: 2,
+                title: 'Bind Target Network Interface',
+                description: 'Select your primary Ethernet / Wi-Fi adapter in the adapter binding prompt.',
+              },
+              {
+                id: 'step-s3',
+                stepNumber: 3,
+                title: 'Activate Zero-Trust Ruleset',
+                description: 'Click "Deploy Ruleset" to lock down unauthorized inbound ports and enable DPI analysis.',
+              },
+            ],
+            importantNotes: [
+              'A brief 2-second network reset will occur during the virtual adapter installation.',
+              'Ensure port 8443 is open for edge cluster telemetry.',
+            ],
+            updatedAt: now,
+          },
         },
         {
           id: 'MOD-NEURAL-VAULT',
@@ -416,6 +569,46 @@ export class AppStore {
           enabled: true,
           requiredRuntime: 'Standard Cyber Runtime (15-30 Days or Perm)',
           orderIndex: 3,
+          filesEnabled: true,
+          setupEnabled: true,
+          files: [
+            {
+              id: 'file-vault-client',
+              panelId: 'MOD-NEURAL-VAULT',
+              title: 'NeuralVault_Client_Setup_v2.9.4.exe',
+              downloadUrl: 'https://downloads.aegis-security.internal/releases/neural_vault_client.exe',
+              description: 'Quantum cryptographic vault interface and local hardware token key manager.',
+              version: 'v2.9.4',
+              fileSize: '31.2 MB',
+              orderIndex: 1,
+              createdAt: now,
+            },
+          ],
+          setup: {
+            panelId: 'MOD-NEURAL-VAULT',
+            enabled: true,
+            videoTitle: 'Neural Key Vault: HSM Hardware Integration & Master Key Generation',
+            videoUrl: '',
+            instructions: 'Quick startup guide to initializing your cryptographic vault storage and generating quantum-resistant seed keys.',
+            steps: [
+              {
+                id: 'step-v1',
+                stepNumber: 1,
+                title: 'Launch Vault Installer',
+                description: 'Run NeuralVault_Client_Setup.exe and specify your encrypted data partition.',
+              },
+              {
+                id: 'step-v2',
+                stepNumber: 2,
+                title: 'Generate Master Seed Key',
+                description: 'Use the entropy pool generator to compute a 256-bit Kyber-1024 master recovery phrase.',
+              },
+            ],
+            importantNotes: [
+              'Store your recovery seed in a secure offline location.',
+            ],
+            updatedAt: now,
+          },
         },
         {
           id: 'MOD-CYBER-SCOUT',
@@ -427,6 +620,26 @@ export class AppStore {
           enabled: true,
           requiredRuntime: 'Standard Cyber Runtime (15-30 Days or Perm)',
           orderIndex: 4,
+          filesEnabled: true,
+          setupEnabled: true,
+          files: [],
+          setup: {
+            panelId: 'MOD-CYBER-SCOUT',
+            enabled: true,
+            videoTitle: '',
+            videoUrl: '',
+            instructions: 'Direct web portal scanner — no local software installation required.',
+            steps: [
+              {
+                id: 'step-c1',
+                stepNumber: 1,
+                title: 'Web Console Access',
+                description: 'The Cyber Reconnaissance Mesh operates entirely via cloud node dispatch.',
+              },
+            ],
+            importantNotes: [],
+            updatedAt: now,
+          },
         },
       ],
       orders: [
@@ -502,6 +715,53 @@ export class AppStore {
       },
       panelPricing: {},
       customerPricing: {},
+      qrConfigs: [
+        { id: 'QR-SENTINEL-15', panelId: 'MOD-AEGIS-SENTINEL', duration: '15Days', price: 120, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SENTINEL-20', panelId: 'MOD-AEGIS-SENTINEL', duration: '20Days', price: 138, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SENTINEL-30', panelId: 'MOD-AEGIS-SENTINEL', duration: '30Days', price: 150, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SENTINEL-PERM', panelId: 'MOD-AEGIS-SENTINEL', duration: 'permanent', price: 216, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+
+        { id: 'QR-SPECTRE-15', panelId: 'MOD-SPECTRE-FIREWALL', duration: '15Days', price: 120, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SPECTRE-20', panelId: 'MOD-SPECTRE-FIREWALL', duration: '20Days', price: 138, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SPECTRE-30', panelId: 'MOD-SPECTRE-FIREWALL', duration: '30Days', price: 150, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SPECTRE-PERM', panelId: 'MOD-SPECTRE-FIREWALL', duration: 'permanent', price: 216, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+
+        { id: 'QR-VAULT-15', panelId: 'MOD-NEURAL-VAULT', duration: '15Days', price: 120, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-VAULT-20', panelId: 'MOD-NEURAL-VAULT', duration: '20Days', price: 138, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-VAULT-30', panelId: 'MOD-NEURAL-VAULT', duration: '30Days', price: 150, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-VAULT-PERM', panelId: 'MOD-NEURAL-VAULT', duration: 'permanent', price: 216, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+
+        { id: 'QR-SCOUT-15', panelId: 'MOD-CYBER-SCOUT', duration: '15Days', price: 120, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SCOUT-20', panelId: 'MOD-CYBER-SCOUT', duration: '20Days', price: 138, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SCOUT-30', panelId: 'MOD-CYBER-SCOUT', duration: '30Days', price: 150, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+        { id: 'QR-SCOUT-PERM', panelId: 'MOD-CYBER-SCOUT', duration: 'permanent', price: 216, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+
+        { id: 'QR-CUST1001-SENTINEL-30', panelId: 'MOD-AEGIS-SENTINEL', duration: '30Days', customerId: 'CUST-1001', price: 150, qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg', enabled: true, updatedAt: now },
+      ],
+      generatedKeys: [
+        {
+          id: 'KEY-REC-SAMPLE-01',
+          key: 'KEY-AEGIS-8F42-99D1-X7K0-2M88',
+          generatedId: 'AG-7K4P9X2M',
+          generatedPassword: 'Q8N4-LP7Z-2X',
+          userId: 'USR-10025',
+          username: 'USER_10025',
+          panelId: 'MOD-AEGIS-SENTINEL',
+          panelName: 'Aegis Quantum Sentinel',
+          orderId: 'ORD-SAMPLE-01',
+          duration: '30 DAYS RUNTIME',
+          durationDays: 30,
+          credentials: {
+            id: 'AG-7K4P9X2M',
+            password: 'Q8N4-LP7Z-2X',
+          },
+          createdAt: now,
+          expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+          status: 'active',
+          testMode: true,
+          isTestMode: true,
+        },
+      ],
     };
   }
 
@@ -517,6 +777,12 @@ export class AppStore {
         }
         if (!parsed.customerPricing) {
           parsed.customerPricing = {};
+        }
+        if (!Array.isArray(parsed.qrConfigs) || parsed.qrConfigs.length === 0) {
+          parsed.qrConfigs = this.getDefaultState().qrConfigs;
+        }
+        if (!Array.isArray(parsed.generatedKeys)) {
+          parsed.generatedKeys = this.getDefaultState().generatedKeys;
         }
         // Ensure stored admin matches current SAGAR551 credentials
         const adminIdx = parsed.users.findIndex((u: any) => u.role === 'admin' || u.username === 'SAGAR551');
@@ -1442,12 +1708,29 @@ export class AppStore {
       updatedAt: new Date().toISOString(),
     };
 
+    // Find QR Config
+    let matchedQr = null;
+    if (this.state.qrConfigs) {
+      matchedQr = this.state.qrConfigs.find(
+        (q) => q.enabled && q.panelId === moduleId && q.duration === durationKey && q.customerId === targetUserId
+      );
+      if (!matchedQr) {
+        matchedQr = this.state.qrConfigs.find(
+          (q) => q.enabled && q.panelId === moduleId && q.duration === durationKey && !q.customerId
+        );
+      }
+    }
+    
+    if (!matchedQr) {
+      // Don't throw, just pass empty so the UI can show "QR NOT CONFIGURED"
+    }
+
     this.state.orders.unshift(newOrder);
     this.saveToStorage();
 
     return {
       order: newOrder,
-      upiQrImageUrl: this.state.settings.upiQrImageUrl,
+      upiQrImageUrl: matchedQr ? matchedQr.qrImageUrl : '',
     };
   }
 
@@ -2067,6 +2350,500 @@ export class AppStore {
     this.saveToStorage();
     this.syncDocToFirestore('settings', 'global', this.state.settings);
     return { success: true, message: 'Settings updated successfully', settings: this.state.settings };
+  }
+
+  // ==========================================
+  // QR CONFIG MANAGEMENT
+  // ==========================================
+  public async getQrConfigs(): Promise<QrConfig[]> {
+    return this.state.qrConfigs || [];
+  }
+
+  public getEffectiveQr(
+    customerId?: string,
+    panelId?: string,
+    durationKey?: '15Days' | '20Days' | '30Days' | 'permanent'
+  ): { qrImageUrl: string | null; isCustom: boolean; isConfigured: boolean; configId?: string } {
+    if (!this.state.qrConfigs || this.state.qrConfigs.length === 0 || !panelId || !durationKey) {
+      return { qrImageUrl: null, isCustom: false, isConfigured: false };
+    }
+
+    let targetCustomerId = customerId;
+    if (customerId) {
+      const customer = this.state.customers?.find(
+        (c) => c.id === customerId || c.customer_id?.toUpperCase() === customerId.toUpperCase() || c.username?.toLowerCase() === customerId.toLowerCase()
+      );
+      if (customer) {
+        targetCustomerId = customer.id;
+      }
+    }
+
+    // 1. Priority 1: Customer + Panel + Duration specific QR
+    if (targetCustomerId) {
+      const customerSpecificQr = this.state.qrConfigs.find(
+        (q) => q.enabled && q.panelId === panelId && q.duration === durationKey && (q.customerId === targetCustomerId || q.customerId === customerId)
+      );
+      if (customerSpecificQr && customerSpecificQr.qrImageUrl) {
+        return {
+          qrImageUrl: customerSpecificQr.qrImageUrl,
+          isCustom: true,
+          isConfigured: true,
+          configId: customerSpecificQr.id,
+        };
+      }
+    }
+
+    // 2. Priority 2: Panel + Duration default QR (no customerId assigned)
+    const defaultPanelQr = this.state.qrConfigs.find(
+      (q) => q.enabled && q.panelId === panelId && q.duration === durationKey && (!q.customerId || q.customerId === '')
+    );
+    if (defaultPanelQr && defaultPanelQr.qrImageUrl) {
+      return {
+        qrImageUrl: defaultPanelQr.qrImageUrl,
+        isCustom: false,
+        isConfigured: true,
+        configId: defaultPanelQr.id,
+      };
+    }
+
+    // 3. Fallback: Not configured
+    return { qrImageUrl: null, isCustom: false, isConfigured: false };
+  }
+
+  public async saveQrConfig(config: QrConfig): Promise<{ success: boolean; message: string; config: QrConfig }> {
+    if (!this.state.qrConfigs) {
+      this.state.qrConfigs = [];
+    }
+    const idx = this.state.qrConfigs.findIndex((q) => q.id === config.id);
+    if (idx !== -1) {
+      this.state.qrConfigs[idx] = config;
+    } else {
+      this.state.qrConfigs.push(config);
+    }
+    this.saveToStorage();
+    await this.syncDocToFirestore('qrConfigs', config.id, config);
+    return { success: true, message: 'QR config saved', config };
+  }
+
+  public async deleteQrConfig(id: string): Promise<void> {
+    if (!this.state.qrConfigs) return;
+    this.state.qrConfigs = this.state.qrConfigs.filter(q => q.id !== id);
+    this.saveToStorage();
+    await this.deleteDocFromFirestore('qrConfigs', id);
+  }
+
+  // ==========================================
+  // PANEL CONTENT MANAGEMENT (FILES & SETUP)
+  // ==========================================
+
+  public getPanelContent(panelId: string): {
+    panel: CyberModule | undefined;
+    filesEnabled: boolean;
+    setupEnabled: boolean;
+    files: PanelDownloadFile[];
+    setup: PanelSetupContent;
+  } {
+    const panel = this.state.modules.find(m => m.id === panelId);
+    const filesEnabled = panel ? panel.filesEnabled !== false : true;
+    const setupEnabled = panel ? panel.setupEnabled !== false : true;
+    const files = panel && Array.isArray(panel.files) ? panel.files : [];
+    const setup = panel && panel.setup ? panel.setup : {
+      panelId,
+      enabled: setupEnabled,
+      videoUrl: '',
+      videoTitle: '',
+      instructions: '',
+      steps: [],
+      importantNotes: [],
+      imageUrl: '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    return {
+      panel,
+      filesEnabled,
+      setupEnabled,
+      files,
+      setup: {
+        ...setup,
+        panelId,
+      },
+    };
+  }
+
+  public async updatePanelContentData(
+    panelId: string,
+    data: {
+      filesEnabled?: boolean;
+      setupEnabled?: boolean;
+      files?: PanelDownloadFile[];
+      setup?: PanelSetupContent;
+    }
+  ): Promise<{ success: boolean; message: string; module: CyberModule }> {
+    const mod = this.state.modules.find(m => m.id === panelId);
+    if (!mod) throw new Error('Panel not found');
+
+    if (typeof data.filesEnabled === 'boolean') {
+      mod.filesEnabled = data.filesEnabled;
+    }
+    if (typeof data.setupEnabled === 'boolean') {
+      mod.setupEnabled = data.setupEnabled;
+    }
+    if (Array.isArray(data.files)) {
+      mod.files = data.files.map((f, idx) => ({
+        ...f,
+        panelId,
+        orderIndex: typeof f.orderIndex === 'number' ? f.orderIndex : idx + 1,
+        updatedAt: new Date().toISOString(),
+      }));
+    }
+    if (data.setup) {
+      mod.setup = {
+        ...data.setup,
+        panelId,
+        enabled: typeof data.setup.enabled === 'boolean' ? data.setup.enabled : (mod.setupEnabled !== false),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    this.logActivity('SAGAR551', 'PANEL_CONTENT_UPDATED', mod.name, 'SUCCESS', `Updated Files & Setup content for ${mod.name}`);
+    this.saveToStorage();
+    await this.syncDocToFirestore('modules', mod.id, mod);
+
+    return {
+      success: true,
+      message: `Content updated successfully for panel "${mod.name}".`,
+      module: mod,
+    };
+  }
+
+  public async togglePanelFilesButton(panelId: string, enabled?: boolean): Promise<{ success: boolean; filesEnabled: boolean }> {
+    const mod = this.state.modules.find(m => m.id === panelId);
+    if (!mod) throw new Error('Panel not found');
+
+    const nextState = typeof enabled === 'boolean' ? enabled : !(mod.filesEnabled !== false);
+    mod.filesEnabled = nextState;
+
+    this.logActivity('SAGAR551', 'PANEL_FILES_TOGGLED', mod.name, 'SUCCESS', `Set files access to ${nextState ? 'ENABLED' : 'DISABLED'} for ${mod.name}`);
+    this.saveToStorage();
+    await this.syncDocToFirestore('modules', mod.id, mod);
+
+    return { success: true, filesEnabled: nextState };
+  }
+
+  public async togglePanelSetupButton(panelId: string, enabled?: boolean): Promise<{ success: boolean; setupEnabled: boolean }> {
+    const mod = this.state.modules.find(m => m.id === panelId);
+    if (!mod) throw new Error('Panel not found');
+
+    const nextState = typeof enabled === 'boolean' ? enabled : !(mod.setupEnabled !== false);
+    mod.setupEnabled = nextState;
+    if (mod.setup) {
+      mod.setup.enabled = nextState;
+    }
+
+    this.logActivity('SAGAR551', 'PANEL_SETUP_TOGGLED', mod.name, 'SUCCESS', `Set setup access to ${nextState ? 'ENABLED' : 'DISABLED'} for ${mod.name}`);
+    this.saveToStorage();
+    await this.syncDocToFirestore('modules', mod.id, mod);
+
+    return { success: true, setupEnabled: nextState };
+  }
+
+  // ==========================================
+  // GENERATED KEYS & POST-PAYMENT ACCESS
+  // ==========================================
+
+  private generateRandomPanelAccessId(): string {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 8; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `AG-${rand}`;
+  }
+
+  private generateRandomPanelAccessPassword(): string {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const seg1 = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const seg2 = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const seg3 = Array.from({ length: 2 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return `${seg1}-${seg2}-${seg3}`;
+  }
+
+  public generateKeyForOrder(
+    orderId: string,
+    customerId?: string,
+    panelId?: string,
+    durationDays?: number,
+    durationName?: string
+  ): GeneratedKeyRecord {
+    if (!this.state.generatedKeys) {
+      this.state.generatedKeys = [];
+    }
+
+    // 1. Check if credentials were already generated for this exact order (Idempotency - never changes on refresh)
+    const existingKey = this.state.generatedKeys.find((k) => k.orderId === orderId);
+    if (existingKey) {
+      return existingKey;
+    }
+
+    // 2. Fetch order or derive parameters
+    const order = this.state.orders.find((o) => o.id === orderId);
+    const targetPanelId = panelId || order?.moduleId || 'mod-1';
+    const panel = this.state.modules.find((m) => m.id === targetPanelId);
+    const targetCustomerId = customerId || order?.userId || 'USR-10025';
+    const customer = this.state.customers.find(
+      (c) => c.id === targetCustomerId || c.customer_id === targetCustomerId || c.username?.toLowerCase() === targetCustomerId.toLowerCase()
+    );
+    const targetUsername = customer ? customer.username : (order?.username || 'Operator');
+    const targetDays = typeof durationDays === 'number' ? durationDays : (order?.durationDays || 30);
+    const targetDurationName = durationName || order?.planName || (targetDays <= 0 ? 'Lifetime' : `${targetDays} Days`);
+
+    // 3. Generate brand new, unique panel access credentials (NEVER user/admin login account credentials)
+    const generatedId = this.generateRandomPanelAccessId();
+    const generatedPassword = this.generateRandomPanelAccessPassword();
+
+    const now = new Date();
+    const expiresAt = targetDays <= 0 ? null : new Date(now.getTime() + targetDays * 86400000).toISOString();
+
+    const recordId = 'CRED-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+
+    const newKeyRecord: GeneratedKeyRecord = {
+      id: recordId,
+      credentialId: recordId,
+      key: generatedId,
+      userId: customer ? customer.id : targetCustomerId,
+      username: targetUsername,
+      panelId: targetPanelId,
+      panelName: panel ? panel.name : targetPanelId,
+      orderId,
+      generatedId,
+      generatedPassword,
+      duration: targetDurationName,
+      durationDays: targetDays,
+      credentials: {
+        id: generatedId,
+        password: generatedPassword,
+      },
+      createdAt: now.toISOString(),
+      expiresAt,
+      status: 'active',
+      testMode: true,
+      isTestMode: true,
+    };
+
+    // Add to generatedKeys list (unshift so latest appears first, never overwriting previous credentials)
+    this.state.generatedKeys.unshift(newKeyRecord);
+
+    // If order exists, mark order as PAID
+    if (order) {
+      order.paymentStatus = 'PAID';
+      order.updatedAt = now.toISOString();
+      order.runtimeStart = now.toISOString();
+      order.runtimeExpiry = expiresAt || undefined;
+      this.syncDocToFirestore('orders', order.id, order);
+    }
+
+    // Update customer's panel_permissions for this panel so they can access VERIFY / FILES / SETUP
+    if (customer) {
+      if (!customer.panel_permissions) customer.panel_permissions = {};
+      customer.panel_permissions[targetPanelId] = {
+        purchased: true,
+        payment_status: 'approved',
+        verify_access: true,
+        files_access: true,
+        setup_access: true,
+        payment_ref: order?.transactionRef || ('UPI-TXN-' + Math.floor(1000000000 + Math.random() * 9000000000)),
+        payment_note: 'Automated Post-Payment Panel Access Credentials Provisioned',
+        purchased_at: now.toISOString(),
+        approved_at: now.toISOString(),
+      };
+      if (!customer.assigned_modules.includes(targetPanelId)) {
+        customer.assigned_modules.push(targetPanelId);
+      }
+      customer.updated_at = now.toISOString();
+      this.syncDocToFirestore('customers', customer.id, customer);
+    }
+
+    // Also activate/provision license in licenses array
+    const licId = 'LIC-' + Math.floor(10000 + Math.random() * 90000);
+    const newLic: AdminLicense = {
+      id: licId,
+      userId: newKeyRecord.userId,
+      username: newKeyRecord.username,
+      moduleId: targetPanelId,
+      moduleName: newKeyRecord.panelName,
+      planId: order?.planId || 'plan-30',
+      isPermanent: targetDays <= 0,
+      durationDays: targetDays,
+      startsAt: now.toISOString(),
+      expiresAt,
+      status: 'active',
+      createdAt: now.toISOString(),
+      createdBy: 'PAYMENT_GATEWAY_AUTO',
+    };
+    this.state.licenses.unshift(newLic);
+
+    this.saveToStorage();
+    this.syncDocToFirestore('generatedKeys', newKeyRecord.id, newKeyRecord);
+    this.syncDocToFirestore('licenses', newLic.id, newLic);
+    this.logActivity('SYSTEM', 'CREDENTIALS_GENERATED', newKeyRecord.generatedId, 'SUCCESS', `Panel credentials generated for ${newKeyRecord.panelName} (${newKeyRecord.duration})`);
+
+    return newKeyRecord;
+  }
+
+  public verifyAccessCredentials(
+    idInput: string,
+    passwordInput: string,
+    panelId?: string
+  ): VerifyKeyResult {
+    const cleanId = (idInput || '').trim();
+    const cleanPass = (passwordInput || '').trim();
+
+    if (!cleanId || !cleanPass) {
+      return {
+        valid: false,
+        message: 'PLEASE ENTER BOTH PANEL ACCESS ID AND PASSWORD',
+      };
+    }
+
+    if (!this.state.generatedKeys) {
+      this.state.generatedKeys = [];
+    }
+
+    // Match strictly against generated panel access credentials (ID + PASSWORD pair)
+    // Never match against user account logins or passwords
+    const matched = this.state.generatedKeys.find((rec) => {
+      const recId = (rec.generatedId || rec.credentials?.id || rec.key || '').trim().toUpperCase();
+      const targetId = cleanId.toUpperCase();
+      const idMatches = recId === targetId;
+
+      const recPass = (rec.generatedPassword || rec.credentials?.password || '').trim();
+      const passMatches = recPass === cleanPass || recPass.toUpperCase() === cleanPass.toUpperCase();
+
+      return idMatches && passMatches;
+    });
+
+    if (!matched) {
+      return {
+        valid: false,
+        message: 'INVALID ACCESS ✕ - ID or Password does not match system records.',
+      };
+    }
+
+    // Panel Isolation check
+    if (panelId && matched.panelId && matched.panelId !== panelId) {
+      return {
+        valid: false,
+        message: 'INVALID ACCESS ✕ - Credential is registered to a different panel.',
+        keyRecord: matched,
+      };
+    }
+
+    // Status check
+    if (matched.status === 'revoked') {
+      return {
+        valid: false,
+        message: 'INVALID ACCESS ✕ - Panel credential has been revoked.',
+        keyRecord: matched,
+      };
+    }
+
+    // Expiry check
+    if (matched.expiresAt && new Date(matched.expiresAt) < new Date()) {
+      return {
+        valid: false,
+        message: 'INVALID ACCESS ✕ - Panel credential duration has ended.',
+        keyRecord: matched,
+      };
+    }
+
+    return {
+      valid: true,
+      message: 'ACCESS VERIFIED ✓',
+      keyRecord: matched,
+    };
+  }
+
+  public verifyKey(keyInput: string, panelId?: string): VerifyKeyResult {
+    const cleanKey = (keyInput || '').trim();
+    if (!cleanKey) {
+      return {
+        valid: false,
+        message: 'PLEASE ENTER VALID CREDENTIALS TO VERIFY',
+      };
+    }
+
+    // If keyInput contains colon, e.g. "ID:PASSWORD"
+    if (cleanKey.includes(':')) {
+      const [idPart, passPart] = cleanKey.split(':');
+      return this.verifyAccessCredentials(idPart, passPart, panelId);
+    }
+
+    if (!this.state.generatedKeys) {
+      this.state.generatedKeys = [];
+    }
+
+    // Single key string lookup fallback
+    const found = this.state.generatedKeys.find(
+      (k) => (k.generatedId && k.generatedId.toUpperCase() === cleanKey.toUpperCase()) ||
+             (k.key && k.key.toUpperCase() === cleanKey.toUpperCase()) ||
+             (k.credentials?.id && k.credentials.id.toUpperCase() === cleanKey.toUpperCase())
+    );
+
+    if (!found) {
+      return {
+        valid: false,
+        message: 'INVALID ACCESS ✕ - Access ID not found in system records.',
+      };
+    }
+
+    // Pass found panel ID and password to verifyAccessCredentials
+    const idVal = found.generatedId || found.credentials?.id || found.key;
+    const passVal = found.generatedPassword || found.credentials?.password || '';
+    return this.verifyAccessCredentials(idVal, passVal, panelId);
+  }
+
+  public getGeneratedKeys(userId?: string, panelId?: string): GeneratedKeyRecord[] {
+    if (!this.state.generatedKeys) {
+      this.state.generatedKeys = [];
+    }
+    return this.state.generatedKeys.filter((k) => {
+      if (userId) {
+        const uClean = userId.trim().toLowerCase();
+        const kUserClean = (k.userId || '').trim().toLowerCase();
+        const kNameClean = (k.username || '').trim().toLowerCase();
+        const kCredIdClean = (k.credentials?.id || '').trim().toLowerCase();
+        const kGenIdClean = (k.generatedId || '').trim().toLowerCase();
+
+        let isMatch =
+          kUserClean === uClean ||
+          kNameClean === uClean ||
+          kCredIdClean === uClean ||
+          kGenIdClean === uClean;
+
+        if (!isMatch) {
+          const cust = this.state.customers?.find(
+            (c) =>
+              c.id?.trim().toLowerCase() === uClean ||
+              (c.customer_id && c.customer_id.trim().toLowerCase() === uClean) ||
+              (c.username && c.username.trim().toLowerCase() === uClean)
+          );
+          if (cust) {
+            const custIdClean = (cust.id || '').trim().toLowerCase();
+            const custCustIdClean = (cust.customer_id || '').trim().toLowerCase();
+            const custNameClean = (cust.username || '').trim().toLowerCase();
+
+            isMatch =
+              (kUserClean !== '' && (kUserClean === custIdClean || kUserClean === custCustIdClean)) ||
+              (kNameClean !== '' && kNameClean === custNameClean);
+          }
+        }
+
+        if (!isMatch) return false;
+      }
+      if (panelId && k.panelId !== panelId) return false;
+      return true;
+    });
   }
 }
 

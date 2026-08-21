@@ -4,13 +4,16 @@ import {
   ArrowLeft, Terminal, Lock, 
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
   Flame, ChevronRight, ShieldCheck, LayoutDashboard, Radio, Shield,
-  User, Copy, CheckCircle2, ImageIcon, FileText, Settings
+  User, Copy, CheckCircle2, ImageIcon, FileText, Settings, Key, Check,
+  Sparkles, RefreshCw, AlertCircle, ShieldAlert
 } from 'lucide-react';
-import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense, PanelPermissionState } from '../types';
+import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense, PanelPermissionState, GeneratedKeyRecord, VerifyKeyResult } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
 import { PremiumPaymentModal } from './PremiumPaymentModal';
 import { apiClient } from '../services/apiClient';
 import { appStore } from '../store/appStore';
+import { PanelFilesView } from './panel/PanelFilesView';
+import { PanelSetupView } from './panel/PanelSetupView';
 
 interface CyberDashboardProps {
   user: UserProfile;
@@ -60,6 +63,13 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [activeFilesModule, setActiveFilesModule] = useState<CyberModule | null>(null);
   const [activeSetupModule, setActiveSetupModule] = useState<CyberModule | null>(null);
 
+  // Credential verification states
+  const [verifyIdInput, setVerifyIdInput] = useState<string>('');
+  const [verifyPasswordInput, setVerifyPasswordInput] = useState<string>('');
+  const [verifyResult, setVerifyResult] = useState<VerifyKeyResult | null>(null);
+  const [isVerifyingKey, setIsVerifyingKey] = useState<boolean>(false);
+  const [panelKeys, setPanelKeys] = useState<GeneratedKeyRecord[]>([]);
+
   const [livePermissions, setLivePermissions] = useState<Record<string, PanelPermissionState>>({});
   const [liveCustomer, setLiveCustomer] = useState<any>(null);
 
@@ -69,9 +79,68 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       setLockedAlert({ moduleName: mod.name, type, reason });
       return;
     }
-    if (type === 'VERIFY') setActiveVerifyModule(mod);
-    else if (type === 'FILES') setActiveFilesModule(mod);
-    else if (type === 'SETUP') setActiveSetupModule(mod);
+    if (type === 'VERIFY') {
+      openVerifyModal(mod);
+    } else if (type === 'FILES') {
+      setActiveFilesModule(mod);
+    } else if (type === 'SETUP') {
+      setActiveSetupModule(mod);
+    }
+  };
+
+  const openVerifyModal = async (mod: CyberModule, prefillId?: string, prefillPassword?: string) => {
+    setActiveVerifyModule(mod);
+    setVerifyResult(null);
+    setVerifyIdInput(prefillId || '');
+    setVerifyPasswordInput(prefillPassword || '');
+    const targetUserId = user.id || user.customer_id || user.username;
+    try {
+      const keys = await apiClient.getGeneratedKeys(targetUserId, mod.id);
+      setPanelKeys(keys);
+      if (prefillId && prefillPassword) {
+        setTimeout(() => executeCredentialVerification(prefillId, prefillPassword, mod.id), 100);
+      }
+    } catch (err) {
+      console.warn('Failed to load panel keys:', err);
+    }
+  };
+
+  const executeCredentialVerification = async (idToVerify?: string, passToVerify?: string, panelId?: string) => {
+    const idStr = (idToVerify !== undefined ? idToVerify : verifyIdInput).trim();
+    const passStr = (passToVerify !== undefined ? passToVerify : verifyPasswordInput).trim();
+
+    if (!idStr || !passStr) {
+      setVerifyResult({
+        valid: false,
+        message: 'PLEASE ENTER BOTH ACCESS ID AND ACCESS PASSWORD',
+      });
+      return;
+    }
+
+    setIsVerifyingKey(true);
+    setVerifyResult(null);
+    cyberAudio.playScan();
+
+    // Show professional animated "VERIFYING ACCESS..." state
+    await new Promise((resolve) => setTimeout(resolve, 850));
+
+    try {
+      const pId = panelId || activeVerifyModule?.id;
+      const res = await apiClient.verifyAccessCredentials(idStr, passStr, pId);
+      setVerifyResult(res);
+      if (res.valid) {
+        cyberAudio.playSuccess();
+      } else {
+        cyberAudio.playClick(600);
+      }
+    } catch (err: any) {
+      setVerifyResult({
+        valid: false,
+        message: err?.message || 'VERIFICATION FAILED: System error during verification.',
+      });
+    } finally {
+      setIsVerifyingKey(false);
+    }
   };
 
   // Load live portal catalogue and personalized pricing from local store / server
@@ -80,15 +149,15 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       const targetPanelId = currentPanelId || activePaywallModule?.id;
       const config = await apiClient.getPortalConfig(user.id || user.customer_id || user.username, targetPanelId);
       setModules(config.modules || []);
-      setPlans(config.plans || []);
+      setPlans((config.plans || []).map((p: any) => ({
+        ...p,
+        userPrice: p.userPrice ?? p.defaultPrice ?? 0,
+        hasCustomPrice: Boolean(p.hasCustomPrice),
+      })));
       setUserLicenses(config.userLicenses || []);
       if (config.upiQrImage) setUpiQrImage(config.upiQrImage);
       if (config.panel_permissions) {
         setLivePermissions(config.panel_permissions);
-        console.log('[CUSTOMER LOAD PERMISSIONS]', {
-          customerId: user.customer_id || user.id || user.username,
-          loadedPermissions: config.panel_permissions,
-        });
       }
       if (config.customer) {
         setLiveCustomer(config.customer);
@@ -109,6 +178,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      cyberAudio.playClick(1200);
       setCopiedField(label);
       setTimeout(() => setCopiedField(null), 2500);
     } catch {
@@ -136,6 +206,47 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const now = new Date();
   const expiryDate = user.expiry_date ? new Date(user.expiry_date) : null;
   const daysRemaining = expiryDate ? Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+
+  // Dedicated FILES View for Selected Panel
+  if (activeFilesModule) {
+    return (
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 z-20 relative">
+        <PanelFilesView
+          panel={activeFilesModule}
+          onBack={() => setActiveFilesModule(null)}
+          onOpenSetup={() => {
+            const mod = activeFilesModule;
+            setActiveFilesModule(null);
+            setActiveSetupModule(mod);
+          }}
+          onOpenBuy={() => {
+            const mod = activeFilesModule;
+            setActiveFilesModule(null);
+            setActivePaywallModule(mod);
+            setIsPaywallOpen(true);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Dedicated SETUP View for Selected Panel
+  if (activeSetupModule) {
+    return (
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 z-20 relative">
+        <PanelSetupView
+          panel={activeSetupModule}
+          onBack={() => setActiveSetupModule(null)}
+          onOpenFiles={() => {
+            const mod = activeSetupModule;
+            setActiveSetupModule(null);
+            setActiveFilesModule(mod);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -452,6 +563,9 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         user={user}
         plans={plans}
         upiQrImage={upiQrImage}
+        onOpenVerifyWithKey={(mod, key) => {
+          openVerifyModal(mod, key);
+        }}
       />
 
       {/* Locked Access Alert Modal */}
@@ -486,90 +600,290 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
         </div>
       )}
 
-      {/* Verify Access Modal */}
+      {/* Robust Key Verification Modal */}
       {activeVerifyModule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border border-emerald-500/50 rounded-3xl p-6 w-full max-w-md text-slate-100 font-mono-code text-xs shadow-[0_0_50px_rgba(16,185,129,0.3)]">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-[#040712]/95 border border-cyan-500/40 rounded-3xl p-6 w-full max-w-lg text-slate-100 font-mono-code text-xs shadow-[0_0_60px_rgba(0,242,254,0.25)] space-y-4 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-950 border border-emerald-500/60 flex items-center justify-center text-emerald-400 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500/60 flex items-center justify-center text-cyan-400 shrink-0 shadow-[0_0_15px_rgba(0,242,254,0.3)]">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-display font-bold text-white">VERIFY: {activeVerifyModule.name}</h3>
-                  <span className="text-[10px] text-emerald-400">STATUS: VERIFIED SECURE & AUTHORIZED</span>
+                  <h3 className="text-base font-display font-bold text-white tracking-wide">
+                    VERIFY ACCESS: {activeVerifyModule.name}
+                  </h3>
+                  <span className="text-[10px] text-cyan-400">
+                    PANEL ID: {activeVerifyModule.id}
+                  </span>
                 </div>
               </div>
-              <button onClick={() => setActiveVerifyModule(null)} className="text-slate-400 hover:text-white">✕</button>
+              <button
+                type="button"
+                onClick={() => setActiveVerifyModule(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
-            <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 mb-4">
-              <div className="flex justify-between"><span className="text-slate-400">Panel ID:</span><span className="text-cyan-300">{activeVerifyModule.id}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Signature:</span><span className="text-emerald-400">SHA-256 VALIDATED</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">License Status:</span><span className="text-emerald-400">ACTIVE & UNLOCKED</span></div>
-            </div>
-            <div className="flex justify-end">
-              <button onClick={() => setActiveVerifyModule(null)} className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold">CLOSE</button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Files Access Modal */}
-      {activeFilesModule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border border-cyan-500/50 rounded-3xl p-6 w-full max-w-md text-slate-100 font-mono-code text-xs shadow-[0_0_50px_rgba(0,242,254,0.3)]">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500/60 flex items-center justify-center text-cyan-400 shrink-0">
-                  <Terminal className="w-5 h-5" />
+            {/* Input & Verification Controls */}
+            <div className="space-y-3">
+              {/* Access ID Field */}
+              <div>
+                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                  ACCESS ID
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={verifyIdInput}
+                    onChange={(e) => setVerifyIdInput(e.target.value)}
+                    placeholder="Enter Access ID (e.g. AG-7K4P9X2M)"
+                    disabled={isVerifyingKey}
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none text-cyan-300 font-mono-code text-xs tracking-wider disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    disabled={isVerifyingKey}
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) setVerifyIdInput(text.trim());
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono-code transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                    title="Paste Access ID"
+                  >
+                    PASTE ID
+                  </button>
+                </div>
+              </div>
+
+              {/* Access Password Field */}
+              <div>
+                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                  ACCESS PASSWORD
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={verifyPasswordInput}
+                    onChange={(e) => setVerifyPasswordInput(e.target.value)}
+                    placeholder="Enter Access Password (e.g. Q8N4-LP7Z-2X)"
+                    disabled={isVerifyingKey}
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none text-white font-mono-code text-xs tracking-wider disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    disabled={isVerifyingKey}
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) setVerifyPasswordInput(text.trim());
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono-code transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                    title="Paste Access Password"
+                  >
+                    PASTE PASS
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => executeCredentialVerification()}
+                disabled={isVerifyingKey || !verifyIdInput.trim() || !verifyPasswordInput.trim()}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-display font-extrabold text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(0,242,254,0.3)] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {isVerifyingKey ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                    <span>VERIFYING ACCESS...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>VERIFY ACCESS</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* VERIFYING LOADING STATE */}
+            {isVerifyingKey && (
+              <div className="p-5 rounded-2xl bg-cyan-950/40 border border-cyan-500/50 text-center space-y-3 shadow-[0_0_25px_rgba(0,242,254,0.2)]">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-900/60 border border-cyan-400/60 flex items-center justify-center mx-auto text-cyan-300">
+                  <RefreshCw className="w-5 h-5 animate-spin" />
                 </div>
                 <div>
-                  <h3 className="text-base font-display font-bold text-white">FILES: {activeFilesModule.name}</h3>
-                  <span className="text-[10px] text-cyan-400">SECURE ASSET REPOSITORY</span>
+                  <h4 className="font-display font-bold text-sm text-cyan-300 tracking-wider">
+                    VERIFYING ACCESS...
+                  </h4>
+                  <p className="text-xs text-slate-300 font-mono-code mt-0.5">
+                    Please wait while we verify your access.
+                  </p>
+                </div>
+                <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-cyan-500/30">
+                  <div className="bg-gradient-to-r from-cyan-400 to-emerald-400 h-full animate-pulse w-3/4 mx-auto rounded-full" />
                 </div>
               </div>
-              <button onClick={() => setActiveFilesModule(null)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 mb-4">
-              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800">
-                <span>payload_core.bin</span>
-                <span className="text-cyan-400 font-bold">READY</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800">
-                <span>config_auth.json</span>
-                <span className="text-cyan-400 font-bold">READY</span>
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <button onClick={() => setActiveFilesModule(null)} className="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold">CLOSE</button>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* Setup Access Modal */}
-      {activeSetupModule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border border-cyan-500/50 rounded-3xl p-6 w-full max-w-md text-slate-100 font-mono-code text-xs shadow-[0_0_50px_rgba(0,242,254,0.3)]">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500/60 flex items-center justify-center text-cyan-400 shrink-0">
-                  <Cpu className="w-5 h-5" />
+            {/* Verification Result Feedback */}
+            {!isVerifyingKey && verifyResult && (
+              <div className={`p-4 rounded-2xl border transition-all ${
+                verifyResult.valid
+                  ? 'bg-emerald-950/40 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                  : 'bg-rose-950/40 border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.2)]'
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {verifyResult.valid ? (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-900 text-emerald-300 border border-emerald-500/50">
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span>ACCESS VERIFIED ✓</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-900 text-rose-300 border border-rose-500/50">
+                      <AlertCircle className="w-3 h-3 text-rose-400" />
+                      <span>INVALID ACCESS ✕</span>
+                    </div>
+                  )}
+                  <span className="text-[11px] text-slate-300 font-bold">{verifyResult.message}</span>
                 </div>
-                <div>
-                  <h3 className="text-base font-display font-bold text-white">SETUP: {activeSetupModule.name}</h3>
-                  <span className="text-[10px] text-cyan-400">INITIALIZATION & CONFIGURATION</span>
+
+                {verifyResult.valid && verifyResult.keyRecord && (
+                  <div className="mt-3 pt-3 border-t border-emerald-500/20 space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Panel Name:</span>
+                      <span className="text-cyan-300 font-bold">{verifyResult.keyRecord.panelName || activeVerifyModule.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Access Status:</span>
+                      <span className="text-emerald-400 font-bold uppercase">{verifyResult.keyRecord.status || 'ACTIVE'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Purchased Duration:</span>
+                      <span className="text-emerald-300 font-bold">{verifyResult.keyRecord.duration}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Expiry Information:</span>
+                      <span className="text-slate-200 font-mono-code">
+                        {verifyResult.keyRecord.expiresAt
+                          ? new Date(verifyResult.keyRecord.expiresAt).toLocaleDateString()
+                          : 'Lifetime / Permanent Access'}
+                      </span>
+                    </div>
+
+                    {/* Associated Panel Access Credentials */}
+                    <div className="mt-2 p-3 rounded-xl bg-slate-950/90 border border-emerald-500/30 space-y-2">
+                      <span className="text-[10px] text-emerald-400 font-bold tracking-wider uppercase block">
+                        VERIFIED PANEL CREDENTIALS:
+                      </span>
+                      <div className="flex items-center justify-between font-mono-code">
+                        <span className="text-slate-400 text-[11px]">ACCESS ID:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-cyan-300 font-bold text-xs">
+                            {verifyResult.keyRecord.generatedId || verifyResult.keyRecord.credentials?.id}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(verifyResult.keyRecord!.generatedId || verifyResult.keyRecord!.credentials?.id, 'Panel ID')}
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors cursor-pointer"
+                            title="Copy Panel ID"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between font-mono-code">
+                        <span className="text-slate-400 text-[11px]">ACCESS PASSWORD:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold text-xs">
+                            {verifyResult.keyRecord.generatedPassword || verifyResult.keyRecord.credentials?.password}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(verifyResult.keyRecord!.generatedPassword || verifyResult.keyRecord!.credentials?.password, 'Panel Password')}
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors cursor-pointer"
+                            title="Copy Panel Password"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Registered Credentials for this Panel */}
+            {panelKeys.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  REGISTERED CREDENTIALS FOR THIS PANEL ({panelKeys.length})
+                </span>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {panelKeys.map((k) => {
+                    const idVal = k.generatedId || k.credentials?.id || k.key;
+                    const passVal = k.generatedPassword || k.credentials?.password || '';
+                    return (
+                      <div
+                        key={k.id}
+                        className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-cyan-500/40 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0 flex-1 font-mono-code">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-cyan-300 truncate">
+                              ID: {idVal}
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30">
+                              {k.duration}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            PASS: {passVal}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVerifyIdInput(idVal);
+                              setVerifyPasswordInput(passVal);
+                              executeCredentialVerification(idVal, passVal, k.panelId);
+                            }}
+                            className="px-2.5 py-1 rounded bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold hover:from-cyan-400 hover:to-emerald-400 text-[10px] transition-all cursor-pointer"
+                          >
+                            VERIFY
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              <button onClick={() => setActiveSetupModule(null)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 mb-4 text-slate-300">
-              <p>1. Ensure system architecture matches v{activeSetupModule.version}.</p>
-              <p>2. Load environmental tokens into secure memory.</p>
-              <p>3. Execute handshake command.</p>
-            </div>
-            <div className="flex justify-end">
-              <button onClick={() => setActiveSetupModule(null)} className="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold">CLOSE</button>
+            )}
+
+            {/* Modal Bottom Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-[10px] text-slate-500">
+                {copiedField ? `COPIED: ${copiedField} ✓` : 'Aegis Defense Network Security Core'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveVerifyModule(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition-colors cursor-pointer"
+              >
+                CLOSE
+              </button>
             </div>
           </div>
         </div>

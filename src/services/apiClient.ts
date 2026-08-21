@@ -1,3 +1,4 @@
+import { QrConfig } from "../types";
 import {
   UserProfile,
   AdminLicense,
@@ -14,6 +15,8 @@ import {
   CyberModule,
   AdminSession,
   SystemSettingsData,
+  GeneratedKeyRecord,
+  VerifyKeyResult,
 } from '../types';
 import { appStore } from '../store/appStore';
 import { storage } from '../store/storage';
@@ -246,6 +249,33 @@ export const apiClient = {
   },
 
   // ==========================================
+  // PANEL CONTENT (FILES & SETUP)
+  // ==========================================
+  getPanelContent(panelId: string) {
+    return appStore.getPanelContent(panelId);
+  },
+
+  async updatePanelContent(
+    panelId: string,
+    data: {
+      filesEnabled?: boolean;
+      setupEnabled?: boolean;
+      files?: any[];
+      setup?: any;
+    }
+  ) {
+    return appStore.updatePanelContentData(panelId, data);
+  },
+
+  async togglePanelFiles(panelId: string, enabled?: boolean) {
+    return appStore.togglePanelFilesButton(panelId, enabled);
+  },
+
+  async togglePanelSetup(panelId: string, enabled?: boolean) {
+    return appStore.togglePanelSetupButton(panelId, enabled);
+  },
+
+  // ==========================================
   // ORDERS MANAGEMENT
   // ==========================================
   async getOrders(): Promise<AdminOrder[]> {
@@ -312,6 +342,52 @@ export const apiClient = {
   // ==========================================
   // IMPORT / EXPORT / RESET
   // ==========================================
+  
+  // ==========================================
+  // QR CONFIG MANAGEMENT
+  // ==========================================
+  getQrConfigs: async function(): Promise<QrConfig[]> {
+    return appStore.getQrConfigs();
+  },
+  getEffectiveQr: function(
+    customerId?: string,
+    panelId?: string,
+    durationKey?: '15Days' | '20Days' | '30Days' | 'permanent'
+  ): { qrImageUrl: string | null; isCustom: boolean; isConfigured: boolean; configId?: string } {
+    return appStore.getEffectiveQr(customerId, panelId, durationKey);
+  },
+  saveQrConfig: async function(config: QrConfig): Promise<{ success: boolean; message: string; config: QrConfig }> {
+    return appStore.saveQrConfig(config);
+  },
+  deleteQrConfig: async function(id: string): Promise<void> {
+    return appStore.deleteQrConfig(id);
+  },
+
+  // ==========================================
+  // GENERATED KEYS & VERIFICATION
+  // ==========================================
+  async generateKeyForOrder(
+    orderId: string,
+    customerId?: string,
+    panelId?: string,
+    durationDays?: number,
+    durationName?: string
+  ): Promise<GeneratedKeyRecord> {
+    return appStore.generateKeyForOrder(orderId, customerId, panelId, durationDays, durationName);
+  },
+
+  async verifyKey(keyInput: string, panelId?: string): Promise<VerifyKeyResult> {
+    return appStore.verifyKey(keyInput, panelId);
+  },
+
+  async verifyAccessCredentials(idInput: string, passwordInput: string, panelId?: string): Promise<VerifyKeyResult> {
+    return appStore.verifyAccessCredentials(idInput, passwordInput, panelId);
+  },
+
+  async getGeneratedKeys(userId?: string, panelId?: string): Promise<GeneratedKeyRecord[]> {
+    return appStore.getGeneratedKeys(userId, panelId);
+  },
+
   exportAppState(): string {
     return appStore.exportState();
   },

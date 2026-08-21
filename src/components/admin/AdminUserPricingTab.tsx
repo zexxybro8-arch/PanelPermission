@@ -264,7 +264,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
         plan30Price: Number(opP30),
         planPermPrice: Number(opPPerm),
       });
-      setOpPricing(updated);
+      setOpPricing(updated.pricing);
       setMessage({ type: 'success', text: `Saved custom rates for operator ${selectedOperatorId}!` });
       if (onPricingUpdated) onPricingUpdated();
     } catch (err: any) {
