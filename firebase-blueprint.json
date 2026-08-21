@@ -123,6 +123,16 @@
         "enabled": { "type": "boolean", "description": "Whether this QR code is active" },
         "updated_at": { "type": "string", "description": "Timestamp string" }
       }
+    },
+    "user_verification_fees": {
+      "fields": {
+        "id": { "type": "string", "description": "Customer ID for whom the custom fee applies" },
+        "userId": { "type": "string", "description": "Customer ID / User ID reference" },
+        "username": { "type": "string", "description": "Customer username reference" },
+        "customFee": { "type": "number", "description": "Custom fee value" },
+        "enabled": { "type": "boolean", "description": "Whether the custom fee is active" },
+        "updatedAt": { "type": "string", "description": "Timestamp string" }
+      }
     }
   }
 }

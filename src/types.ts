@@ -292,6 +292,16 @@ export interface SystemSettingsData {
   defaultNode: string;
   upiQrImageUrl: string;
   sessionTimeoutHours: number;
+  globalVerificationFee?: number;
+}
+
+export interface UserVerificationFee {
+  id: string;
+  userId: string;
+  username: string;
+  customFee: number;
+  enabled: boolean;
+  updatedAt: string;
 }
 
 export interface PanelPricing {

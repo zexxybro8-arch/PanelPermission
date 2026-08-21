@@ -17,6 +17,7 @@ import {
   SystemSettingsData,
   GeneratedKeyRecord,
   VerifyKeyResult,
+  UserVerificationFee,
 } from '../types';
 import { appStore } from '../store/appStore';
 import { storage } from '../store/storage';
@@ -386,6 +387,21 @@ export const apiClient = {
 
   async getGeneratedKeys(userId?: string, panelId?: string): Promise<GeneratedKeyRecord[]> {
     return appStore.getGeneratedKeys(userId, panelId);
+  },
+
+  // ==========================================
+  // USER VERIFICATION FEES
+  // ==========================================
+  async getUserVerificationFee(userId: string): Promise<number> {
+    return appStore.getUserVerificationFee(userId);
+  },
+
+  async saveUserVerificationFee(userId: string, customFee: number, enabled: boolean): Promise<{ success: boolean; message: string; fee: UserVerificationFee }> {
+    return appStore.saveUserVerificationFee(userId, customFee, enabled);
+  },
+
+  async resetUserVerificationFee(userId: string): Promise<{ success: boolean; message: string }> {
+    return appStore.resetUserVerificationFee(userId);
   },
 
   exportAppState(): string {

@@ -24,6 +24,7 @@ import { AdminUsersKeysTab } from './AdminUsersKeysTab';
 import { AdminSessionsTab } from './AdminSessionsTab';
 import { AdminLogsTab } from './AdminLogsTab';
 import { AdminSettingsTab } from './AdminSettingsTab';
+import { AdminVerifyPayTab } from './AdminVerifyPayTab';
 import { AdminLoginModal } from './AdminLoginModal';
 import { AdminErrorBoundary } from './AdminErrorBoundary';
 
@@ -136,6 +137,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
     { id: 'users_keys', label: 'USERS KEYS', icon: Key, highlight: true, badge: 'AUDIT' },
     { id: 'licenses', label: 'LICENSES & KEYS', icon: Key, badge: `${licenses.length}` },
     { id: 'sessions', label: 'USER SESSIONS', icon: ShieldAlert, badge: `${sessions.length}` },
+    { id: 'verify_pay', label: 'VERIFY PAY', icon: DollarSign, highlight: true, badge: 'FEE' },
     { id: 'logs', label: 'ACTIVITY AUDIT', icon: FileText },
     { id: 'settings', label: 'SETTINGS', icon: Settings },
   ];
@@ -399,6 +401,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onBackToPortal }) => {
               <AdminLogsTab
                 logs={logs}
                 onRefresh={fetchAllAdminData}
+              />
+            )}
+
+            {activeTab === 'verify_pay' && (
+              <AdminVerifyPayTab
+                settings={settings}
+                onUpdateSettings={() => fetchAllAdminData()}
               />
             )}
 

@@ -5,7 +5,7 @@ import {
   Zap, Cpu, Activity, Droplets, Crosshair, EyeOff,
   Flame, ChevronRight, ShieldCheck, LayoutDashboard, Radio, Shield,
   User, Copy, CheckCircle2, ImageIcon, FileText, Settings, Key, Check,
-  Sparkles, RefreshCw, AlertCircle, ShieldAlert
+  Sparkles, RefreshCw, AlertCircle, ShieldAlert, DollarSign
 } from 'lucide-react';
 import { UserProfile, CyberModule, AdminRuntimePlan, AdminLicense, PanelPermissionState, GeneratedKeyRecord, VerifyKeyResult } from '../types';
 import { cyberAudio } from '../utils/cyberAudio';
@@ -70,6 +70,43 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
   const [isVerifyingKey, setIsVerifyingKey] = useState<boolean>(false);
   const [panelKeys, setPanelKeys] = useState<GeneratedKeyRecord[]>([]);
 
+  // New verification payment states
+  const [verificationFee, setVerificationFee] = useState<number>(150);
+  const [showVerificationPaymentModal, setShowVerificationPaymentModal] = useState<boolean>(false);
+  const [verificationOrderId, setVerificationOrderId] = useState<string | null>(null);
+  const [verificationPaymentStatus, setVerificationPaymentStatus] = useState<'PENDING' | 'PAID' | 'FAILED' | 'IDLE'>('IDLE');
+  const [isCreatingVerificationOrder, setIsCreatingVerificationOrder] = useState<boolean>(false);
+
+  // Fetch user-specific or global verification fee when opening verification modal
+  useEffect(() => {
+    const fetchFee = async () => {
+      if (activeVerifyModule && user) {
+        try {
+          const fee = await apiClient.getUserVerificationFee(user.id || user.customer_id || user.username || '');
+          setVerificationFee(fee);
+        } catch (err) {
+          console.warn('Failed to fetch verification fee:', err);
+          setVerificationFee(150);
+        }
+      }
+    };
+    fetchFee();
+  }, [activeVerifyModule, user]);
+
+  // Real-time observer of verification order status from global state sync
+  useEffect(() => {
+    if (verificationOrderId && verificationPaymentStatus === 'PENDING') {
+      const activeOrder = appStore.state.orders?.find(o => o.id === verificationOrderId);
+      if (activeOrder && activeOrder.paymentStatus === 'PAID') {
+        cyberAudio.playSuccess();
+        setVerificationPaymentStatus('PAID');
+        setShowVerificationPaymentModal(false);
+        // Automatically complete credentials verification since payment is validated!
+        executeCredentialVerification(verifyIdInput, verifyPasswordInput, activeVerifyModule?.id);
+      }
+    }
+  }, [appStore.state.orders, verificationOrderId, verificationPaymentStatus]);
+
   const [livePermissions, setLivePermissions] = useState<Record<string, PanelPermissionState>>({});
   const [liveCustomer, setLiveCustomer] = useState<any>(null);
 
@@ -94,6 +131,35 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
     setVerifyIdInput('');
     setVerifyPasswordInput('');
     setIsVerifyingKey(false);
+    setShowVerificationPaymentModal(false);
+    setVerificationOrderId(null);
+    setVerificationPaymentStatus('IDLE');
+  };
+
+  const handleCreateVerificationPayment = async () => {
+    if (isCreatingVerificationOrder) return;
+    setIsCreatingVerificationOrder(true);
+    try {
+      const currentUserId = user.id || user.customer_id || user.username || 'USER_10025';
+      const orderRes = await apiClient.createOrder(
+        currentUserId, 
+        activeVerifyModule?.id || '', 
+        'VERIFY-FEE', 
+        {
+          planName: `Verification: ${activeVerifyModule?.name || 'Panel'}`,
+          finalPrice: verificationFee,
+          durationDays: 0
+        }
+      );
+      if (orderRes && orderRes.order) {
+        setVerificationOrderId(orderRes.order.id);
+        setVerificationPaymentStatus('PENDING');
+      }
+    } catch (err) {
+      console.error('Error creating verification order:', err);
+    } finally {
+      setIsCreatingVerificationOrder(false);
+    }
   };
 
   const executeCredentialVerification = async (idToVerify?: string, passToVerify?: string, panelId?: string) => {
@@ -108,12 +174,18 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       return;
     }
 
+    // Intercept with professional animated payment popup
+    if (verificationPaymentStatus !== 'PAID') {
+      setShowVerificationPaymentModal(true);
+      return;
+    }
+
     setIsVerifyingKey(true);
     setVerifyResult(null);
     cyberAudio.playScan();
 
     // Show professional animated "VERIFYING ACCESS..." state
-    await new Promise((resolve) => setTimeout(resolve, 850));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     try {
       const pId = panelId || activeVerifyModule?.id;
@@ -121,6 +193,9 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       setVerifyResult(res);
       if (res.valid) {
         cyberAudio.playSuccess();
+        // Reset payment status after successful verification so next time is fresh
+        setVerificationPaymentStatus('IDLE');
+        setVerificationOrderId(null);
       } else {
         cyberAudio.playClick(600);
       }
@@ -606,93 +681,204 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
               </button>
             </div>
 
-            {/* Input & Verification Controls */}
-            <div className="space-y-3">
-              {/* Access ID Field */}
-              <div>
-                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
-                  ACCESS ID
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={verifyIdInput}
-                    onChange={(e) => setVerifyIdInput(e.target.value)}
-                    placeholder="Enter Access ID (e.g. AG-7K4P9X2M)"
-                    disabled={isVerifyingKey}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none text-cyan-300 font-mono-code text-xs tracking-wider disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    disabled={isVerifyingKey}
-                    onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText();
-                        if (text) setVerifyIdInput(text.trim());
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono-code transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                    title="Paste Access ID"
-                  >
-                    PASTE ID
-                  </button>
-                </div>
-              </div>
+            {/* Input & Verification Controls or Verification Payment screens */}
+            {showVerificationPaymentModal ? (
+              <div className="space-y-4">
+                {verificationPaymentStatus === 'IDLE' && (
+                  <div className="p-5 rounded-2xl bg-[#070e1e]/90 border border-cyan-500/20 text-center space-y-4 shadow-[0_0_25px_rgba(0,242,254,0.1)] animate-fade-in">
+                    <div className="w-12 h-12 rounded-2xl bg-cyan-950 border border-cyan-500/40 flex items-center justify-center mx-auto text-cyan-300 shadow-[0_0_15px_rgba(0,242,254,0.2)]">
+                      <DollarSign className="w-6 h-6 animate-pulse" />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <h4 className="font-display font-black text-sm text-white tracking-widest uppercase">
+                        VERIFY ACCESS
+                      </h4>
+                      <p className="text-[10px] font-mono-code text-cyan-400">
+                        Panel: {activeVerifyModule.name}
+                      </p>
+                    </div>
 
-              {/* Access Password Field */}
-              <div>
-                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
-                  ACCESS PASSWORD
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={verifyPasswordInput}
-                    onChange={(e) => setVerifyPasswordInput(e.target.value)}
-                    placeholder="Enter Access Password (e.g. Q8N4-LP7Z-2X)"
-                    disabled={isVerifyingKey}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none text-white font-mono-code text-xs tracking-wider disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    disabled={isVerifyingKey}
-                    onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText();
-                        if (text) setVerifyPasswordInput(text.trim());
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono-code transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                    title="Paste Access Password"
-                  >
-                    PASTE PASS
-                  </button>
-                </div>
-              </div>
+                    <div className="py-2.5 px-4 bg-slate-950/80 border border-slate-800 rounded-xl max-w-xs mx-auto space-y-0.5">
+                      <span className="text-[9px] font-mono-code text-slate-500 uppercase tracking-wider block">
+                        Verification Fee
+                      </span>
+                      <span className="font-display font-extrabold text-xl text-cyan-300">
+                        ₹{verificationFee}
+                      </span>
+                    </div>
 
-              <button
-                type="button"
-                onClick={() => executeCredentialVerification()}
-                disabled={isVerifyingKey || !verifyIdInput.trim() || !verifyPasswordInput.trim()}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-display font-extrabold text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(0,242,254,0.3)] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-              >
-                {isVerifyingKey ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                    <span>VERIFYING ACCESS...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>VERIFY ACCESS</span>
-                  </>
+                    <p className="text-[10px] text-slate-400 font-mono-code max-w-sm mx-auto leading-relaxed">
+                      Secure verification is required before access can be verified.
+                    </p>
+
+                    <div className="flex gap-3 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleCreateVerificationPayment()}
+                        disabled={isCreatingVerificationOrder}
+                        className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 hover:from-cyan-300 hover:to-sky-300 text-slate-950 font-display font-extrabold text-xs tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        {isCreatingVerificationOrder ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <span>PAY ₹{verificationFee} &amp; VERIFY</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowVerificationPaymentModal(false);
+                          setVerificationPaymentStatus('IDLE');
+                          setVerificationOrderId(null);
+                        }}
+                        className="py-3 px-4 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white font-mono-code text-xs transition-all cursor-pointer"
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </button>
-            </div>
+
+                {verificationPaymentStatus === 'PENDING' && (
+                  <div className="p-5 rounded-2xl bg-[#070e1e]/90 border border-cyan-500/20 text-center space-y-4 shadow-[0_0_25px_rgba(0,242,254,0.1)] animate-fade-in">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="text-[9px] font-mono-code text-cyan-400 uppercase tracking-wider font-bold">
+                        TRANSACTION PENDING
+                      </span>
+                      <span className="text-[9px] font-mono-code text-slate-500 font-bold">
+                        ORDER: {verificationOrderId}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="font-display font-black text-xs text-white tracking-widest uppercase">
+                        AWAITING PAYMENT CONFIRMATION
+                      </h4>
+                      <p className="text-[10px] font-mono-code text-slate-400 leading-normal">
+                        Please scan the QR code to complete the verification payment of ₹{verificationFee}.
+                      </p>
+                    </div>
+
+                    {/* QR Code */}
+                    <div className="p-3 bg-white rounded-2xl w-40 h-40 mx-auto flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.1)] border border-cyan-500/20">
+                      <img
+                        src={appStore.state.settings?.upiQrImageUrl || 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg'}
+                        alt="UPI QR Code"
+                        className="max-w-full max-h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+
+                    <div className="py-2 px-4 bg-slate-950/80 border border-slate-800 rounded-xl max-w-xs mx-auto flex items-center justify-center gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                      <span className="text-[9px] font-mono-code text-cyan-300">
+                        Awaiting admin approval...
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVerificationPaymentModal(false);
+                        setVerificationPaymentStatus('IDLE');
+                        setVerificationOrderId(null);
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white font-mono-code text-xs transition-all cursor-pointer"
+                    >
+                      CANCEL &amp; RETURN
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Access ID Field */}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                    ACCESS ID
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={verifyIdInput}
+                      onChange={(e) => setVerifyIdInput(e.target.value)}
+                      placeholder="Enter Access ID (e.g. AG-7K4P9X2M)"
+                      disabled={isVerifyingKey}
+                      className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none text-cyan-300 font-mono-code text-xs tracking-wider disabled:opacity-50"
+                    />
+                    <button
+                      type="button"
+                      disabled={isVerifyingKey}
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) setVerifyIdInput(text.trim());
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono-code transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                      title="Paste Access ID"
+                    >
+                      PASTE ID
+                    </button>
+                  </div>
+                </div>
+
+                {/* Access Password Field */}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                    ACCESS PASSWORD
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={verifyPasswordInput}
+                      onChange={(e) => setVerifyPasswordInput(e.target.value)}
+                      placeholder="Enter Access Password (e.g. Q8N4-LP7Z-2X)"
+                      disabled={isVerifyingKey}
+                      className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none text-white font-mono-code text-xs tracking-wider disabled:opacity-50"
+                    />
+                    <button
+                      type="button"
+                      disabled={isVerifyingKey}
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) setVerifyPasswordInput(text.trim());
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono-code transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                      title="Paste Access Password"
+                    >
+                      PASTE PASS
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => executeCredentialVerification()}
+                  disabled={isVerifyingKey || !verifyIdInput.trim() || !verifyPasswordInput.trim()}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-display font-extrabold text-xs tracking-wider transition-all shadow-[0_0_20px_rgba(0,242,254,0.3)] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isVerifyingKey ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                      <span>VERIFYING ACCESS...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>VERIFY ACCESS</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* VERIFYING LOADING STATE */}
             {isVerifyingKey && (

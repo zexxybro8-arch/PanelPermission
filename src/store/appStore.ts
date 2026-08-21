@@ -31,6 +31,7 @@ import {
   PanelSetupContent,
   GeneratedKeyRecord,
   VerifyKeyResult,
+  UserVerificationFee,
 } from '../types';
 import { storage } from './storage';
 
@@ -56,6 +57,7 @@ export interface AppStoreState {
   users: StoredUserAccount[];
   customers: StoredCustomerRecord[];
   userPricing: Record<string, UserCustomPricing>;
+  userVerificationFees: Record<string, UserVerificationFee>;
   runtimePlans: AdminRuntimePlan[];
   modules: CyberModule[];
   orders: AdminOrder[];
@@ -171,6 +173,20 @@ export class AppStore {
         this.saveToStorageOnly();
         this.notify();
       }, (err) => console.warn('Firestore userPricing sync error:', err));
+
+      // 6b. Custom Verification Fees real-time listener
+      onSnapshot(collection(db, 'userVerificationFees'), (snapshot) => {
+        const map: Record<string, UserVerificationFee> = {};
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as UserVerificationFee;
+          if (data && data.userId) {
+            map[data.userId] = data;
+          }
+        });
+        this.state.userVerificationFees = map;
+        this.saveToStorageOnly();
+        this.notify();
+      }, (err) => console.warn('Firestore userVerificationFees sync error:', err));
 
       // 7. System Settings real-time listener
       onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
@@ -382,6 +398,7 @@ export class AppStore {
           updatedBy: 'SAGAR551',
         },
       },
+      userVerificationFees: {},
       runtimePlans: [
         {
           id: 'plan-15',
@@ -712,6 +729,7 @@ export class AppStore {
         defaultNode: 'SG-01 (Singapore)',
         upiQrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg',
         sessionTimeoutHours: 168,
+        globalVerificationFee: 150,
       },
       panelPricing: {},
       customerPricing: {},
@@ -2030,6 +2048,69 @@ export class AppStore {
       this.deleteDocFromFirestore('userPricing', user.id);
     }
     return { success: true, message: 'Reset custom pricing to defaults' };
+  }
+
+  // ==========================================
+  // USER VERIFICATION FEES MANAGEMENT
+  // ==========================================
+
+  public getUserVerificationFee(userId: string): number {
+    if (!userId) return Number(this.state.settings?.globalVerificationFee ?? 150);
+    // Find customer by id, customer_id or username
+    const customer = this.state.customers?.find(
+      (c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase()
+    );
+    const targetId = customer ? customer.id : userId;
+    const custom = this.state.userVerificationFees ? this.state.userVerificationFees[targetId] : undefined;
+    if (custom && custom.enabled) {
+      return Number(custom.customFee);
+    }
+    return Number(this.state.settings?.globalVerificationFee ?? 150);
+  }
+
+  public saveUserVerificationFee(userId: string, customFee: number, enabled: boolean): { success: boolean; message: string; fee: UserVerificationFee } {
+    const customer = this.state.customers?.find(
+      (c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase()
+    );
+    if (!customer) throw new Error('Customer not found');
+
+    const feeRecord: UserVerificationFee = {
+      id: customer.id,
+      userId: customer.id,
+      username: customer.username,
+      customFee: Number(customFee),
+      enabled: Boolean(enabled),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (!this.state.userVerificationFees) {
+      this.state.userVerificationFees = {};
+    }
+    this.state.userVerificationFees[customer.id] = feeRecord;
+    this.logActivity('SAGAR551', 'VERIFY_FEE_UPDATED', customer.username, 'SUCCESS', `Updated custom verification fee for ${customer.username} to ₹${customFee}`);
+    this.saveToStorage();
+    this.syncDocToFirestore('userVerificationFees', customer.id, feeRecord);
+
+    return {
+      success: true,
+      message: `Custom verification fee for ${customer.username} saved successfully`,
+      fee: feeRecord
+    };
+  }
+
+  public resetUserVerificationFee(userId: string): { success: boolean; message: string } {
+    const customer = this.state.customers?.find(
+      (c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase()
+    );
+    if (customer) {
+      if (this.state.userVerificationFees) {
+        delete this.state.userVerificationFees[customer.id];
+      }
+      this.saveToStorage();
+      this.deleteDocFromFirestore('userVerificationFees', customer.id);
+      this.logActivity('SAGAR551', 'VERIFY_FEE_RESET', customer.username, 'SUCCESS', `Reset custom verification fee for ${customer.username}`);
+    }
+    return { success: true, message: 'Reset custom verification fee to global default' };
   }
 
   // ==========================================
