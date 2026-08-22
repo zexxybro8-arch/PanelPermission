@@ -995,9 +995,18 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
 
                 return (
                   <div key={mod.id} className="bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
                       <span className="font-bold text-slate-100 text-xs font-mono-code">{mod.name}</span>
                       <span className="text-[10px] text-slate-500 font-mono-code bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">{mod.id}</span>
+                      {(() => {
+                        const custId = activeCustomer?.id || activeCustomer?.customer_id || activeCustomer?.username || '';
+                        const hasKey = appStore.hasValidKeyForPanel(custId, mod.id);
+                        return (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono-code font-bold border ${hasKey ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}>
+                            KEY GENERATED: {hasKey ? 'YES' : 'NO'}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4">
@@ -2447,12 +2456,21 @@ export const AdminCustomerManagementTab: React.FC<AdminCustomerManagementTabProp
                   <div key={mod.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold text-white text-sm">{mod.name}</span>
                           <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">{mod.tag}</span>
                           {isAssigned && (
                             <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30">ASSIGNED</span>
                           )}
+                          {(() => {
+                            const custId = permissionsModalCustomer?.id || permissionsModalCustomer?.customer_id || permissionsModalCustomer?.username || '';
+                            const hasKey = appStore.hasValidKeyForPanel(custId, mod.id);
+                            return (
+                              <span className={`text-[10px] px-2 py-0.5 rounded font-mono-code font-bold border ${hasKey ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40' : 'bg-slate-900 text-slate-500 border-slate-800'}`}>
+                                KEY GENERATED: {hasKey ? 'YES' : 'NO'}
+                              </span>
+                            );
+                          })()}
                         </div>
                         {panelPerms.payment_ref && (
                           <div className="text-[11px] text-amber-300 mt-1">

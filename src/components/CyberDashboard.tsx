@@ -382,6 +382,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 z-20 relative">
         <PanelFilesView
           panel={activeFilesModule}
+          user={user}
           onBack={() => setActiveFilesModule(null)}
           onOpenSetup={() => {
             const mod = activeFilesModule;
@@ -405,11 +406,18 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
       <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 z-20 relative">
         <PanelSetupView
           panel={activeSetupModule}
+          user={user}
           onBack={() => setActiveSetupModule(null)}
           onOpenFiles={() => {
             const mod = activeSetupModule;
             setActiveSetupModule(null);
             setActiveFilesModule(mod);
+          }}
+          onOpenBuy={() => {
+            const mod = activeSetupModule;
+            setActiveSetupModule(null);
+            setActivePaywallModule(mod);
+            setIsPaywallOpen(true);
           }}
         />
       </div>

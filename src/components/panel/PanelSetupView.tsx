@@ -5,14 +5,17 @@ import {
   AlertTriangle, ShieldAlert, Check, HelpCircle, ExternalLink,
   Layers, Lock, Video, RefreshCw
 } from 'lucide-react';
-import { CyberModule, PanelSetupContent, PanelSetupStep } from '../../types';
+import { CyberModule, PanelSetupContent, PanelSetupStep, UserProfile } from '../../types';
 import { apiClient } from '../../services/apiClient';
 import { cyberAudio } from '../../utils/cyberAudio';
+import { appStore } from '../../store/appStore';
 
 interface PanelSetupViewProps {
   panel: CyberModule;
+  user?: UserProfile;
   onBack: () => void;
   onOpenFiles?: () => void;
+  onOpenBuy?: () => void;
 }
 
 // Helper to convert standard YouTube/Vimeo URLs to embeddable URLs
@@ -49,13 +52,31 @@ function formatVideoEmbedUrl(url?: string): string | null {
 
 export const PanelSetupView: React.FC<PanelSetupViewProps> = ({
   panel,
+  user,
   onBack,
   onOpenFiles,
+  onOpenBuy,
 }) => {
   const [setupData, setSetupData] = useState<PanelSetupContent | null>(panel.setup || null);
   const [setupEnabled, setSetupEnabled] = useState<boolean>(panel.setupEnabled !== false);
+  const [showFilesSetupGuide, setShowFilesSetupGuide] = useState<boolean>(!!appStore.state.settings?.showFilesSetupGuide);
+  const [hasKey, setHasKey] = useState<boolean>(false);
   const [completedSteps, setCompletedSteps] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const checkKey = () => {
+      const userId = user?.id || user?.customer_id || user?.username || '';
+      const valid = appStore.hasValidKeyForPanel(userId, panel.id);
+      setHasKey(valid);
+    };
+    checkKey();
+    const unsubscribe = appStore.subscribe(() => {
+      setShowFilesSetupGuide(!!appStore.state.settings?.showFilesSetupGuide);
+      checkKey();
+    });
+    return () => unsubscribe();
+  }, [user, panel.id]);
 
   useEffect(() => {
     const loadContent = async () => {
@@ -157,17 +178,17 @@ export const PanelSetupView: React.FC<PanelSetupViewProps> = ({
       </div>
 
       {/* Main Content Area */}
-      {!setupEnabled ? (
+      {!showFilesSetupGuide ? (
         <div className="w-full rounded-3xl cyber-glass p-8 border border-amber-500/30 bg-slate-950/90 text-center space-y-4 shadow-[0_0_40px_rgba(245,158,11,0.1)]">
           <div className="w-14 h-14 rounded-2xl bg-amber-950/80 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto">
             <Lock className="w-7 h-7" />
           </div>
           <div className="max-w-md mx-auto space-y-2">
             <h3 className="text-lg font-display font-bold text-white tracking-wide">
-              SETUP GUIDE CURRENTLY DISABLED
+              SETUP GUIDE CURRENTLY OFF
             </h3>
             <p className="text-xs font-mono-code text-slate-400 leading-relaxed">
-              The administrator has temporarily hidden the setup manual for <span className="text-amber-300 font-bold">{panel.name}</span>. Please check back shortly or consult your operator.
+              The setup guide feature is currently toggled OFF in the admin global settings.
             </p>
           </div>
           <div className="pt-2">
@@ -177,6 +198,63 @@ export const PanelSetupView: React.FC<PanelSetupViewProps> = ({
             >
               RETURN TO PANELS
             </button>
+          </div>
+        </div>
+      ) : !setupEnabled ? (
+        <div className="w-full rounded-3xl cyber-glass p-8 border border-amber-500/30 bg-slate-950/90 text-center space-y-4 shadow-[0_0_40px_rgba(245,158,11,0.1)]">
+          <div className="w-14 h-14 rounded-2xl bg-amber-950/80 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto">
+            <Lock className="w-7 h-7" />
+          </div>
+          <div className="max-w-md mx-auto space-y-2">
+            <h3 className="text-lg font-display font-bold text-white tracking-wide">
+              SETUP GUIDE CURRENTLY DISABLED
+            </h3>
+            <p className="text-xs font-mono-code text-slate-400 leading-relaxed">
+              The administrator has temporarily hidden the setup manual for <span className="text-amber-300 font-bold">{panel.name}</span>. Please check back shortly.
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              onClick={onBack}
+              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono-code text-white font-bold transition-colors cursor-pointer"
+            >
+              RETURN TO PANELS
+            </button>
+          </div>
+        </div>
+      ) : !hasKey ? (
+        <div className="w-full rounded-3xl cyber-glass p-8 sm:p-12 border border-rose-500/30 bg-slate-950/90 text-center space-y-6 shadow-[0_0_50px_rgba(244,63,94,0.15)] my-6">
+          <div className="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(244,63,94,0.3)]">
+            <Lock className="w-8 h-8 animate-pulse" />
+          </div>
+          <div className="max-w-md mx-auto space-y-2">
+            <span className="px-3 py-1 rounded-full text-[10px] font-mono-code font-bold bg-rose-950 text-rose-300 border border-rose-500/40 tracking-wider">
+              ACCESS RESTRICTED
+            </span>
+            <h3 className="font-display font-bold text-xl sm:text-2xl text-white tracking-wide">
+              SETUP GUIDE LOCKED
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 font-mono-code leading-relaxed">
+              You must successfully generate and hold a valid access key for <span className="text-cyan-300 font-bold">{panel.name}</span> to unlock the initialization and setup guide.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-mono-code text-white font-bold transition-colors cursor-pointer"
+            >
+              RETURN TO PANELS
+            </button>
+            {onOpenBuy && (
+              <button
+                type="button"
+                onClick={onOpenBuy}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-mono-code text-xs font-bold transition-all shadow-[0_0_20px_rgba(0,242,254,0.4)] cursor-pointer flex items-center gap-2"
+              >
+                <span>GENERATE KEY / PURCHASE ACCESS</span>
+              </button>
+            )}
           </div>
         </div>
       ) : (

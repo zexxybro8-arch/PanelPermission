@@ -2728,8 +2728,8 @@ export class AppStore {
         purchased: true,
         payment_status: 'approved',
         verify_access: true,
-        files_access: false,
-        setup_access: false,
+        files_access: true,
+        setup_access: true,
         payment_ref: order?.transactionRef || ('UPI-TXN-' + Math.floor(1000000000 + Math.random() * 9000000000)),
         payment_note: 'Automated Post-Payment Panel Access Credentials Provisioned',
         purchased_at: now.toISOString(),
@@ -3033,6 +3033,16 @@ export class AppStore {
 
     this.saveToStorage();
     this.syncDocToFirestore('verificationRequests', request.id, request);
+  }
+
+  public hasValidKeyForPanel(userId?: string, panelId?: string): boolean {
+    if (!this.state.generatedKeys || !panelId) return false;
+    const keys = this.getGeneratedKeys(userId, panelId);
+    return keys.some((k) => {
+      if (k.status !== 'active') return false;
+      if (k.expiresAt && new Date(k.expiresAt) < new Date()) return false;
+      return true;
+    });
   }
 
   public getGeneratedKeys(userId?: string, panelId?: string): GeneratedKeyRecord[] {
