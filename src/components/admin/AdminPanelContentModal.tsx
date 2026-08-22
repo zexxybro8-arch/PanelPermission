@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { 
   X, FileText, Settings, Video, Plus, Trash2, Edit3, 
   ExternalLink, Check, AlertTriangle, Play, HardDrive, 
-  Eye, Save, ArrowUp, ArrowDown, Power, HelpCircle, Shield
+  Eye, Save, ArrowUp, ArrowDown, Power, HelpCircle, Shield, Users
 } from 'lucide-react';
-import { CyberModule, PanelDownloadFile, PanelSetupStep, PanelSetupContent } from '../../types';
+import { CyberModule, PanelDownloadFile, PanelSetupStep, PanelSetupContent, UserProfile } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { appStore } from '../../store/appStore';
 import { PanelFilesView } from '../panel/PanelFilesView';
 import { PanelSetupView } from '../panel/PanelSetupView';
 
@@ -22,6 +23,42 @@ export const AdminPanelContentModal: React.FC<AdminPanelContentModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'FILES' | 'SETUP' | 'PREVIEW'>('FILES');
   const [previewSubTab, setPreviewSubTab] = useState<'FILES' | 'SETUP'>('FILES');
+  const [previewUserId, setPreviewUserId] = useState<string>(() => {
+    const custs = appStore.state.customers || [];
+    return custs.length > 0 ? (custs[0].customer_id || custs[0].id) : 'test-preview-user';
+  });
+  const customers = appStore.state.customers || [];
+  const rawCustomer = customers.find(c => c.customer_id === previewUserId || c.id === previewUserId);
+  const previewUser: UserProfile = rawCustomer ? {
+    id: rawCustomer.id,
+    customer_id: rawCustomer.customer_id,
+    username: rawCustomer.username,
+    codename: rawCustomer.username || 'OPERATOR',
+    clearanceLevel: 3,
+    role: 'customer',
+    terminalId: 'TRM-PREVIEW',
+    ipAddress: '127.0.0.1',
+    nodeRegion: 'SG-01',
+    avatarSeed: rawCustomer.username || 'user',
+    sessionToken: 'preview-token',
+    loginTime: new Date().toISOString(),
+    status: rawCustomer.status,
+    expiry_date: rawCustomer.expiry_date,
+    assigned_modules: rawCustomer.assigned_modules,
+  } : {
+    id: previewUserId,
+    customer_id: previewUserId,
+    username: previewUserId,
+    codename: 'GUEST',
+    clearanceLevel: 1,
+    role: 'customer',
+    terminalId: 'TRM-GUEST',
+    ipAddress: '127.0.0.1',
+    nodeRegion: 'SG-01',
+    avatarSeed: 'guest',
+    sessionToken: 'guest-token',
+    loginTime: new Date().toISOString(),
+  };
 
   // Files State
   const [filesEnabled, setFilesEnabled] = useState<boolean>(panel.filesEnabled !== false);
@@ -803,13 +840,32 @@ export const AdminPanelContentModal: React.FC<AdminPanelContentModalProps> = ({
           {/* ========================================== */}
           {activeTab === 'PREVIEW' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between bg-slate-900/90 p-3 rounded-2xl border border-slate-800">
-                <span className="text-xs font-mono-code text-slate-400 flex items-center gap-1.5">
-                  <Eye className="w-4 h-4 text-cyan-400" />
-                  SIMULATING USER VIEW:
-                </span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-950/90 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono-code text-slate-400 block">SIMULATING PERSPECTIVE OF:</span>
+                    <select
+                      value={previewUserId}
+                      onChange={(e) => setPreviewUserId(e.target.value)}
+                      className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono-code text-cyan-300 font-bold focus:outline-none focus:border-cyan-400 cursor-pointer"
+                    >
+                      {customers.length === 0 ? (
+                        <option value="test-preview-user">Test User (No Active Keys)</option>
+                      ) : (
+                        customers.map(c => (
+                          <option key={c.id || c.customer_id} value={c.customer_id || c.id}>
+                            {c.username || c.customer_id} ({c.status})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <button
                     type="button"
                     onClick={() => setPreviewSubTab('FILES')}
@@ -839,12 +895,14 @@ export const AdminPanelContentModal: React.FC<AdminPanelContentModalProps> = ({
                 {previewSubTab === 'FILES' ? (
                   <PanelFilesView
                     panel={previewPanelObject}
+                    user={previewUser}
                     onBack={() => {}}
                     onOpenSetup={() => setPreviewSubTab('SETUP')}
                   />
                 ) : (
                   <PanelSetupView
                     panel={previewPanelObject}
+                    user={previewUser}
                     onBack={() => {}}
                     onOpenFiles={() => setPreviewSubTab('FILES')}
                   />

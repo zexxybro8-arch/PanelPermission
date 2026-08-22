@@ -743,7 +743,7 @@ export class AppStore {
         upiQrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg',
         sessionTimeoutHours: 168,
         globalVerificationFee: 150,
-        showFilesSetupGuide: false,
+        showFilesSetupGuide: true,
       },
       panelPricing: {},
       customerPricing: {},
