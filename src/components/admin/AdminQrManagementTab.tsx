@@ -8,6 +8,7 @@ import { apiClient } from '../../services/apiClient';
 import { QrConfig, CyberModule, Customer } from '../../types';
 import { extractErrorMessage } from '../../utils/errorMessage';
 import { cyberAudio } from '../../utils/cyberAudio';
+import { appStore } from '../../store/appStore';
 
 export const AdminQrManagementTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -31,6 +32,36 @@ export const AdminQrManagementTab: React.FC = () => {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [batchPanelId, setBatchPanelId] = useState<string>('');
   const [batchQrUrl, setBatchQrUrl] = useState<string>('https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg');
+
+  const [storeState, setStoreState] = useState(appStore.state);
+
+  useEffect(() => {
+    const unsubscribe = appStore.subscribe(() => {
+      setStoreState({ ...appStore.state });
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const getGlobalPrice = (panelId?: string, duration?: string): number | null => {
+    if (!panelId || !duration) return null;
+    const globalPricing = storeState.panelPricing?.[panelId];
+    if (globalPricing) {
+      const price = globalPricing[duration as '15Days' | '20Days' | '30Days' | 'permanent'];
+      if (typeof price === 'number' && price > 0) {
+        return price;
+      }
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    if (editingConfig) {
+      const resolvedPrice = getGlobalPrice(editingConfig.panelId, editingConfig.duration);
+      if (resolvedPrice !== editingConfig.price) {
+        setEditingConfig(prev => prev ? { ...prev, price: resolvedPrice || undefined } : null);
+      }
+    }
+  }, [editingConfig?.panelId, editingConfig?.duration, storeState.panelPricing]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchFileInputRef = useRef<HTMLInputElement>(null);
@@ -67,12 +98,15 @@ export const AdminQrManagementTab: React.FC = () => {
     if (config) {
       setEditingConfig({ ...config });
     } else {
+      const initialPanelId = modules[0]?.id || 'MOD-AEGIS-SENTINEL';
+      const initialDuration = '30Days';
+      const resolvedPrice = getGlobalPrice(initialPanelId, initialDuration);
       setEditingConfig({
-        panelId: modules[0]?.id || 'MOD-AEGIS-SENTINEL',
-        duration: '30Days',
+        panelId: initialPanelId,
+        duration: initialDuration,
         customerId: activeTab === 'customer' ? (customers[0]?.id || '') : undefined,
         qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg',
-        price: 150,
+        price: resolvedPrice || undefined,
         enabled: true,
       });
     }
@@ -123,6 +157,12 @@ export const AdminQrManagementTab: React.FC = () => {
       setMessage({ type: 'error', text: 'Please fill all required fields.' });
       return;
     }
+
+    const resolvedPrice = getGlobalPrice(editingConfig.panelId, editingConfig.duration);
+    if (resolvedPrice === null) {
+      setMessage({ type: 'error', text: 'Cannot save: A valid global price is not configured for the selected panel and duration.' });
+      return;
+    }
     
     setSaving(true);
     try {
@@ -131,7 +171,7 @@ export const AdminQrManagementTab: React.FC = () => {
         panelId: editingConfig.panelId,
         duration: editingConfig.duration as any,
         customerId: activeTab === 'customer' ? (editingConfig.customerId || undefined) : undefined,
-        price: editingConfig.price ? Number(editingConfig.price) : undefined,
+        price: resolvedPrice,
         qrImageUrl: editingConfig.qrImageUrl,
         enabled: editingConfig.enabled ?? true,
         updatedAt: new Date().toISOString(),
@@ -167,23 +207,29 @@ export const AdminQrManagementTab: React.FC = () => {
       return;
     }
 
+    // Verify all 4 durations have a configured global price
+    for (const dur of durations) {
+      const p = getGlobalPrice(batchPanelId, dur);
+      if (p === null) {
+        setMessage({
+          type: 'error',
+          text: `Cannot batch generate: The global price for duration "${dur}" is not configured on this panel.`
+        });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
-      const standardPrices: Record<string, number> = {
-        '15Days': 120,
-        '20Days': 138,
-        '30Days': 150,
-        'permanent': 216,
-      };
-
       for (const dur of durations) {
+        const resolvedPrice = getGlobalPrice(batchPanelId, dur)!;
         const existing = configs.find(c => c.panelId === batchPanelId && c.duration === dur && !c.customerId);
         const configId = existing ? existing.id : `QR-${batchPanelId}-${dur}`;
         const newConfig: QrConfig = {
           id: configId,
           panelId: batchPanelId,
           duration: dur,
-          price: standardPrices[dur],
+          price: resolvedPrice,
           qrImageUrl: batchQrUrl,
           enabled: true,
           updatedAt: new Date().toISOString(),
@@ -664,12 +710,18 @@ export const AdminQrManagementTab: React.FC = () => {
                 <div className="space-y-1.5">
                   <label className="text-slate-300 font-bold">Configured Price (INR):</label>
                   <input
-                    type="number"
-                    value={editingConfig.price || ''}
-                    onChange={(e) => setEditingConfig({ ...editingConfig, price: Number(e.target.value) })}
-                    placeholder="e.g. 150"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-violet-500 outline-none"
+                    type="text"
+                    value={editingConfig.price !== undefined && editingConfig.price !== null ? String(editingConfig.price) : 'Price not configured'}
+                    disabled
+                    placeholder="Price not configured"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 focus:border-violet-500 outline-none opacity-80 cursor-not-allowed font-bold"
                   />
+                  {(editingConfig.price === undefined || editingConfig.price === null) && (
+                    <p className="text-rose-400 text-[10px] mt-1 font-mono-code flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>Please configure a global price for this panel + duration in the Admin pricing section first.</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* QR Code Upload / URL */}
@@ -761,8 +813,8 @@ export const AdminQrManagementTab: React.FC = () => {
               <button
                 form="qr-form"
                 type="submit"
-                disabled={saving}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-mono-code text-xs font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(139,92,246,0.4)] transition-all cursor-pointer disabled:opacity-50"
+                disabled={saving || editingConfig.price === undefined || editingConfig.price === null}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-mono-code text-xs font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(139,92,246,0.4)] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                 <span>{editingConfig.id ? 'UPDATE CONFIGURATION' : 'SAVE CONFIGURATION'}</span>
