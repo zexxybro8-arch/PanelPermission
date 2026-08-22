@@ -743,6 +743,7 @@ export class AppStore {
         upiQrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg',
         sessionTimeoutHours: 168,
         globalVerificationFee: 150,
+        showFilesSetupGuide: false,
       },
       panelPricing: {},
       customerPricing: {},
@@ -1743,17 +1744,12 @@ export class AppStore {
       updatedAt: new Date().toISOString(),
     };
 
-    // Find QR Config
+    // Find QR Config by finalPrice
     let matchedQr = null;
     if (this.state.qrConfigs) {
       matchedQr = this.state.qrConfigs.find(
-        (q) => q.enabled && q.panelId === moduleId && q.duration === durationKey && q.customerId === targetUserId
+        (q) => q.enabled && q.price === finalPrice
       );
-      if (!matchedQr) {
-        matchedQr = this.state.qrConfigs.find(
-          (q) => q.enabled && q.panelId === moduleId && q.duration === durationKey && !q.customerId
-        );
-      }
     }
     
     if (!matchedQr) {
@@ -2462,49 +2458,29 @@ export class AppStore {
     panelId?: string,
     durationKey?: '15Days' | '20Days' | '30Days' | 'permanent'
   ): { qrImageUrl: string | null; isCustom: boolean; isConfigured: boolean; configId?: string } {
-    if (!this.state.qrConfigs || this.state.qrConfigs.length === 0 || !panelId || !durationKey) {
+    if (!panelId || !durationKey) {
       return { qrImageUrl: null, isCustom: false, isConfigured: false };
     }
 
-    let targetCustomerId = customerId;
-    if (customerId) {
-      const customer = this.state.customers?.find(
-        (c) => c.id === customerId || c.customer_id?.toUpperCase() === customerId.toUpperCase() || c.username?.toLowerCase() === customerId.toLowerCase()
-      );
-      if (customer) {
-        targetCustomerId = customer.id;
-      }
+    const resolvedPrice = this.getEffectivePrice(customerId || '', panelId, durationKey);
+
+    if (!this.state.qrConfigs || this.state.qrConfigs.length === 0) {
+      return { qrImageUrl: null, isCustom: false, isConfigured: false };
     }
 
-    // 1. Priority 1: Customer + Panel + Duration specific QR
-    if (targetCustomerId) {
-      const customerSpecificQr = this.state.qrConfigs.find(
-        (q) => q.enabled && q.panelId === panelId && q.duration === durationKey && (q.customerId === targetCustomerId || q.customerId === customerId)
-      );
-      if (customerSpecificQr && customerSpecificQr.qrImageUrl) {
-        return {
-          qrImageUrl: customerSpecificQr.qrImageUrl,
-          isCustom: true,
-          isConfigured: true,
-          configId: customerSpecificQr.id,
-        };
-      }
-    }
-
-    // 2. Priority 2: Panel + Duration default QR (no customerId assigned)
-    const defaultPanelQr = this.state.qrConfigs.find(
-      (q) => q.enabled && q.panelId === panelId && q.duration === durationKey && (!q.customerId || q.customerId === '')
+    const matchedQr = this.state.qrConfigs.find(
+      (q) => q.enabled && q.price === resolvedPrice
     );
-    if (defaultPanelQr && defaultPanelQr.qrImageUrl) {
+
+    if (matchedQr && matchedQr.qrImageUrl) {
       return {
-        qrImageUrl: defaultPanelQr.qrImageUrl,
-        isCustom: false,
+        qrImageUrl: matchedQr.qrImageUrl,
+        isCustom: !!customerId,
         isConfigured: true,
-        configId: defaultPanelQr.id,
+        configId: matchedQr.id,
       };
     }
 
-    // 3. Fallback: Not configured
     return { qrImageUrl: null, isCustom: false, isConfigured: false };
   }
 

@@ -57,11 +57,28 @@ export const AdminQrManagementTab: React.FC = () => {
   useEffect(() => {
     if (editingConfig) {
       const resolvedPrice = getGlobalPrice(editingConfig.panelId, editingConfig.duration);
+      
+      const existingQrForPrice = resolvedPrice !== null 
+        ? configs.find(c => c.price === resolvedPrice) 
+        : null;
+
       if (resolvedPrice !== editingConfig.price) {
-        setEditingConfig(prev => prev ? { ...prev, price: resolvedPrice || undefined } : null);
+        // Price changed: update price and dynamically load/switch QR image URL
+        const newUrl = existingQrForPrice ? existingQrForPrice.qrImageUrl : '';
+        setEditingConfig(prev => prev ? { 
+          ...prev, 
+          price: resolvedPrice || undefined, 
+          qrImageUrl: newUrl 
+        } : null);
+      } else if (existingQrForPrice && editingConfig.qrImageUrl !== existingQrForPrice.qrImageUrl) {
+        // If the price is the same, but the loaded/existing QR URL differs from current state, synchronize them
+        setEditingConfig(prev => prev ? { 
+          ...prev, 
+          qrImageUrl: existingQrForPrice.qrImageUrl 
+        } : null);
       }
     }
-  }, [editingConfig?.panelId, editingConfig?.duration, storeState.panelPricing]);
+  }, [editingConfig?.panelId, editingConfig?.duration, storeState.panelPricing, configs]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchFileInputRef = useRef<HTMLInputElement>(null);
@@ -101,11 +118,16 @@ export const AdminQrManagementTab: React.FC = () => {
       const initialPanelId = modules[0]?.id || 'MOD-AEGIS-SENTINEL';
       const initialDuration = '30Days';
       const resolvedPrice = getGlobalPrice(initialPanelId, initialDuration);
+      
+      const existingQrForPrice = resolvedPrice !== null 
+        ? configs.find(c => c.price === resolvedPrice) 
+        : null;
+
       setEditingConfig({
         panelId: initialPanelId,
         duration: initialDuration,
         customerId: activeTab === 'customer' ? (customers[0]?.id || '') : undefined,
-        qrImageUrl: 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg',
+        qrImageUrl: existingQrForPrice ? existingQrForPrice.qrImageUrl : 'https://i.ibb.co/jPq2zZBP/IMG-20260819-221909-884.jpg',
         price: resolvedPrice || undefined,
         enabled: true,
       });
@@ -167,7 +189,7 @@ export const AdminQrManagementTab: React.FC = () => {
     setSaving(true);
     try {
       const configToSave: QrConfig = {
-        id: editingConfig.id || `QR-${editingConfig.panelId}-${editingConfig.duration}-${Date.now().toString(36)}`,
+        id: `PRICE-${resolvedPrice}`,
         panelId: editingConfig.panelId,
         duration: editingConfig.duration as any,
         customerId: activeTab === 'customer' ? (editingConfig.customerId || undefined) : undefined,
@@ -223,10 +245,8 @@ export const AdminQrManagementTab: React.FC = () => {
     try {
       for (const dur of durations) {
         const resolvedPrice = getGlobalPrice(batchPanelId, dur)!;
-        const existing = configs.find(c => c.panelId === batchPanelId && c.duration === dur && !c.customerId);
-        const configId = existing ? existing.id : `QR-${batchPanelId}-${dur}`;
         const newConfig: QrConfig = {
-          id: configId,
+          id: `PRICE-${resolvedPrice}`,
           panelId: batchPanelId,
           duration: dur,
           price: resolvedPrice,

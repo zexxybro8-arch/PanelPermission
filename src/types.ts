@@ -293,6 +293,7 @@ export interface SystemSettingsData {
   upiQrImageUrl: string;
   sessionTimeoutHours: number;
   globalVerificationFee?: number;
+  showFilesSetupGuide?: boolean;
 }
 
 export interface UserVerificationFee {

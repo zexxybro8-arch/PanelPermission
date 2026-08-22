@@ -218,6 +218,23 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
                 className="w-4 h-4 accent-cyan-400 cursor-pointer"
               />
             </div>
+
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <div>
+                <span className="text-xs font-mono-code font-bold text-white block">
+                  FILES SETUP GUIDE
+                </span>
+                <span className="text-[11px] font-mono-code text-slate-400">
+                  Control visibility of the Setup Guide button on the user files repository (OFF by default)
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={!!formData.showFilesSetupGuide}
+                onChange={(e) => setFormData({ ...formData, showFilesSetupGuide: e.target.checked })}
+                className="w-4 h-4 accent-cyan-400 cursor-pointer"
+              />
+            </div>
           </div>
 
           <div className="pt-4 flex justify-end">

@@ -7,6 +7,7 @@ import {
 import { CyberModule, PanelDownloadFile } from '../../types';
 import { apiClient } from '../../services/apiClient';
 import { cyberAudio } from '../../utils/cyberAudio';
+import { appStore } from '../../store/appStore';
 
 interface PanelFilesViewProps {
   panel: CyberModule;
@@ -23,9 +24,17 @@ export const PanelFilesView: React.FC<PanelFilesViewProps> = ({
 }) => {
   const [files, setFiles] = useState<PanelDownloadFile[]>(panel.files || []);
   const [filesEnabled, setFilesEnabled] = useState<boolean>(panel.filesEnabled !== false);
+  const [showFilesSetupGuide, setShowFilesSetupGuide] = useState<boolean>(!!appStore.state.settings?.showFilesSetupGuide);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = appStore.subscribe(() => {
+      setShowFilesSetupGuide(!!appStore.state.settings?.showFilesSetupGuide);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     // Refresh content from store/API
@@ -116,7 +125,7 @@ export const PanelFilesView: React.FC<PanelFilesViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
-            {onOpenSetup && (
+            {showFilesSetupGuide && onOpenSetup && (
               <button
                 type="button"
                 onClick={onOpenSetup}
