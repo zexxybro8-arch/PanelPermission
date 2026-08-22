@@ -244,15 +244,11 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
     }
 
     setIsVerifyingKey(true);
-    setVerificationStage('validating');
     setVerifyResult(null);
-    cyberAudio.playScan();
-
-    // Show professional animated "VERIFYING ACCESS..." state with smooth scanning animation
-    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     try {
       const pId = panelId || activeVerifyModule?.id;
+      // First validate that the credentials actually exist and belong to a valid/generated key for the selected panel.
       const res = await apiClient.verifyAccessCredentials(idStr, passStr, pId);
       
       if (!res.valid && res.message !== 'VERIFICATION_REQUIRED') {
@@ -262,10 +258,18 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
           message: res.message || 'INVALID ACCESS CREDENTIALS',
         });
         setVerificationStage('input');
+        setIsVerifyingKey(false);
         return;
       }
 
-      // Valid credentials or needs verification! Keep the result
+      // Valid credentials confirmed! Open the professional "VERIFYING" status popup first.
+      setVerificationStage('validating');
+      cyberAudio.playScan();
+
+      // Show professional animated "VERIFYING ACCESS..." state with smooth scanning animation
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Keep the pre-validated result
       setPreValidatedKeyResult(res);
 
       const currentUserId = user.id || user.customer_id || user.username || 'USER_10025';
@@ -1057,7 +1061,7 @@ export const CyberDashboard: React.FC<CyberDashboardProps> = ({
                     VERIFICATION REJECTED
                   </h4>
                   <p className="text-[10px] font-mono-code text-slate-300">
-                    Your verification request was rejected by the administrator.
+                    Your verification request was not approved.
                   </p>
                 </div>
 

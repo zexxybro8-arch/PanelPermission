@@ -2752,8 +2752,8 @@ export class AppStore {
         purchased: true,
         payment_status: 'approved',
         verify_access: true,
-        files_access: true,
-        setup_access: true,
+        files_access: false,
+        setup_access: false,
         payment_ref: order?.transactionRef || ('UPI-TXN-' + Math.floor(1000000000 + Math.random() * 9000000000)),
         payment_note: 'Automated Post-Payment Panel Access Credentials Provisioned',
         purchased_at: now.toISOString(),
@@ -3010,6 +3010,27 @@ export class AppStore {
         matched.lastVerifiedAt = nowIso;
         matched.verificationCount = (matched.verificationCount || 0) + 1;
         this.syncDocToFirestore('generatedKeys', matched.id, matched);
+
+        // Update customer panel permissions to grant files and setup access
+        const pId = matched.panelId || request.panelId;
+        const customer = this.state.customers.find(
+          (c) => c.id === matched.userId || c.customer_id === matched.userId || c.username?.toLowerCase() === matched.username?.toLowerCase()
+        );
+        if (customer && pId) {
+          if (!customer.panel_permissions) customer.panel_permissions = {};
+          if (!customer.panel_permissions[pId]) {
+            customer.panel_permissions[pId] = {
+              purchased: true,
+              payment_status: 'approved',
+              verify_access: true,
+              files_access: false,
+              setup_access: false,
+            };
+          }
+          customer.panel_permissions[pId].files_access = true;
+          customer.panel_permissions[pId].setup_access = true;
+          this.syncDocToFirestore('customers', customer.id, customer);
+        }
       }
     }
 
