@@ -24,6 +24,8 @@ import {
   CustomerCreationInput,
   CreatedCustomerResult,
   PanelPricing,
+  PanelDurationPricing,
+  DurationType,
   CustomerPricing,
   QrConfig,
   PanelDownloadFile,
@@ -1572,35 +1574,170 @@ export class AppStore {
   // PORTAL & PRICING
   // ==========================================
 
-  public getEffectivePrice(customerId: string, panelId: string, durationKey: '15Days' | '20Days' | '30Days' | 'permanent'): number {
+  public normalizePanelPricing(pricing: any, panelId?: string): PanelPricing {
+    if (!pricing) {
+      const panel = panelId ? this.state.modules?.find(m => m.id === panelId) : null;
+      if (panel) {
+        const base = panel.price || 120;
+        return {
+          panelId,
+          durations: [
+            { id: 'dur_15', durationType: 'DAYS', durationDays: 15, price: base, enabled: true, label: '15 Days' },
+            { id: 'dur_20', durationType: 'DAYS', durationDays: 20, price: Math.round(base * 1.15), enabled: true, label: '20 Days' },
+            { id: 'dur_30', durationType: 'DAYS', durationDays: 30, price: Math.round(base * 1.25), enabled: true, label: '30 Days' },
+            { id: 'dur_perm', durationType: 'PERMANENT', durationDays: null, price: Math.round(base * 1.8), enabled: true, label: 'Permanent' },
+          ],
+        };
+      }
+      return { panelId, durations: [] };
+    }
+
+    if (Array.isArray(pricing.durations)) {
+      return {
+        ...pricing,
+        panelId: pricing.panelId || panelId,
+        durations: pricing.durations.map((d: any) => ({
+          id: d.id || (d.durationType === 'PERMANENT' ? 'dur_perm' : `dur_${d.durationDays}`),
+          durationType: d.durationType === 'PERMANENT' || d.durationDays === null || d.durationDays <= 0 ? 'PERMANENT' : 'DAYS',
+          durationDays: (d.durationType === 'PERMANENT' || d.durationDays === null || d.durationDays <= 0) ? null : Number(d.durationDays),
+          price: Number(d.price) || 0,
+          enabled: d.enabled !== false,
+          label: d.label || (d.durationType === 'PERMANENT' || d.durationDays === null ? 'Permanent' : `${d.durationDays} Days`),
+        })),
+      };
+    }
+
+    // Convert legacy object format { "15Days": 120, "20Days": 138, "30Days": 150, "permanent": 216 }
+    const durations: PanelDurationPricing[] = [];
+    if (typeof pricing['15Days'] === 'number' && pricing['15Days'] > 0) {
+      durations.push({
+        id: 'dur_15',
+        durationType: 'DAYS',
+        durationDays: 15,
+        price: pricing['15Days'],
+        enabled: true,
+        label: '15 Days',
+      });
+    }
+    if (typeof pricing['20Days'] === 'number' && pricing['20Days'] > 0) {
+      durations.push({
+        id: 'dur_20',
+        durationType: 'DAYS',
+        durationDays: 20,
+        price: pricing['20Days'],
+        enabled: true,
+        label: '20 Days',
+      });
+    }
+    if (typeof pricing['30Days'] === 'number' && pricing['30Days'] > 0) {
+      durations.push({
+        id: 'dur_30',
+        durationType: 'DAYS',
+        durationDays: 30,
+        price: pricing['30Days'],
+        enabled: true,
+        label: '30 Days',
+      });
+    }
+    if (typeof pricing['permanent'] === 'number' && pricing['permanent'] > 0) {
+      durations.push({
+        id: 'dur_perm',
+        durationType: 'PERMANENT',
+        durationDays: null,
+        price: pricing['permanent'],
+        enabled: true,
+        label: 'Permanent',
+      });
+    }
+
+    return {
+      ...pricing,
+      panelId: pricing.panelId || panelId,
+      durations,
+    };
+  }
+
+  public getPanelPricing(panelId: string): PanelPricing {
+    const raw = this.state.panelPricing?.[panelId];
+    return this.normalizePanelPricing(raw, panelId);
+  }
+
+  public getEffectivePrice(customerId: string, panelId: string, durationIdentifier: string | number | null): number {
+    const normalized = this.getPanelPricing(panelId);
+    const durations = normalized.durations || [];
+
+    // 1. Identify target duration
+    let targetDuration: PanelDurationPricing | undefined;
+    const isPermIdentifier =
+      durationIdentifier === 'permanent' ||
+      durationIdentifier === 'PERMANENT' ||
+      durationIdentifier === 'Lifetime' ||
+      durationIdentifier === null ||
+      durationIdentifier === -1 ||
+      durationIdentifier === 3650 ||
+      durationIdentifier === 'plan-perm' ||
+      durationIdentifier === 'plan-permanent';
+
+    if (isPermIdentifier) {
+      targetDuration = durations.find((d) => d.durationType === 'PERMANENT');
+    } else {
+      const parsedDays =
+        typeof durationIdentifier === 'number'
+          ? durationIdentifier
+          : parseInt(String(durationIdentifier).replace(/\D/g, ''), 10);
+
+      if (!isNaN(parsedDays) && parsedDays > 0) {
+        targetDuration = durations.find((d) => d.durationType === 'DAYS' && d.durationDays === parsedDays);
+      }
+      if (!targetDuration && typeof durationIdentifier === 'string') {
+        targetDuration = durations.find((d) => d.id === durationIdentifier || d.label === durationIdentifier);
+      }
+    }
+
+    // 2. Check Customer-specific overrides if customerId is provided
     if (customerId) {
-      const customer = this.state.customers.find(c => c.id === customerId || c.customer_id === customerId || c.username?.toLowerCase() === customerId.toLowerCase());
+      const customer = this.state.customers.find(
+        (c) => c.id === customerId || c.customer_id === customerId || c.username?.toLowerCase() === customerId.toLowerCase()
+      );
       const targetId = customer ? customer.id : customerId;
       const custPricing = this.state.customerPricing?.[targetId];
       if (custPricing && custPricing[panelId]) {
-        const val = custPricing[panelId][durationKey];
-        if (typeof val === 'number' && val > 0) {
-          return val;
+        const panelOverrides = custPricing[panelId];
+        if (targetDuration) {
+          const overrideVal =
+            (targetDuration.id && panelOverrides.durations?.[targetDuration.id]) ??
+            (targetDuration.durationDays && panelOverrides.durations?.[`dur_${targetDuration.durationDays}`]) ??
+            (targetDuration.durationType === 'PERMANENT' && panelOverrides.durations?.['permanent']) ??
+            (targetDuration.durationDays && panelOverrides[`${targetDuration.durationDays}Days`]) ??
+            (targetDuration.durationType === 'PERMANENT' && panelOverrides['permanent']);
+
+          if (typeof overrideVal === 'number' && overrideVal > 0) {
+            return overrideVal;
+          }
+        }
+
+        const rawOverride = panelOverrides[String(durationIdentifier)];
+        if (typeof rawOverride === 'number' && rawOverride > 0) {
+          return rawOverride;
         }
       }
     }
 
-    if (panelId && this.state.panelPricing?.[panelId]) {
-      const val = this.state.panelPricing[panelId][durationKey];
-      if (typeof val === 'number' && val > 0) {
-        return val;
-      }
+    // 3. Return panel duration configured price if found
+    if (targetDuration && typeof targetDuration.price === 'number' && targetDuration.price > 0) {
+      return targetDuration.price;
     }
 
-    const customer = customerId ? this.state.customers.find(c => c.id === customerId || c.customer_id === customerId || c.username?.toLowerCase() === customerId.toLowerCase()) : null;
-    const panel = this.state.modules.find(m => m.id === panelId);
+    // 4. Fallback to customer or panel base price
+    const customer = customerId
+      ? this.state.customers.find(
+          (c) => c.id === customerId || c.customer_id === customerId || c.username?.toLowerCase() === customerId.toLowerCase()
+        )
+      : null;
+    const panel = this.state.modules.find((m) => m.id === panelId);
     const basePrice = customer?.price ?? panel?.price ?? 120;
 
-    if (durationKey === '15Days') return basePrice;
-    if (durationKey === '20Days') return Math.round(basePrice * 1.15);
-    if (durationKey === '30Days') return Math.round(basePrice * 1.25);
-    if (durationKey === 'permanent') return Math.round(basePrice * 1.8);
-
+    if (isPermIdentifier) return Math.round(basePrice * 1.8);
     return basePrice;
   }
 
@@ -1608,9 +1745,11 @@ export class AppStore {
     if (!this.state.panelPricing) {
       this.state.panelPricing = {};
     }
-    this.state.panelPricing[panelId] = pricing;
+    const normalized = this.normalizePanelPricing(pricing, panelId);
+    this.state.panelPricing[panelId] = normalized;
     this.saveToStorage();
-    await this.syncDocToFirestore('panelPricing', panelId, pricing);
+    await this.syncDocToFirestore('panelPricing', panelId, normalized);
+    this.notify();
   }
 
   public async saveCustomerPricing(customerId: string, pricing: CustomerPricing) {
@@ -1620,65 +1759,59 @@ export class AppStore {
     this.state.customerPricing[customerId] = pricing;
     this.saveToStorage();
     await this.syncDocToFirestore('customerPricing', customerId, pricing);
+    this.notify();
   }
 
   public getPortalConfig(userId?: string, panelId?: string) {
     const user = userId ? this.state.users.find((u) => u.id === userId || u.username.toUpperCase() === userId.toUpperCase()) : null;
     const customer = userId ? this.state.customers.find((c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase()) : null;
     const targetUserId = user ? user.id : (customer ? customer.id : userId);
-    const customPricing = targetUserId ? this.state.userPricing[targetUserId] : null;
 
-    const plans = this.state.runtimePlans
-      .filter((p) => p.status === 'active')
-      .map((plan) => {
-        let durationKey: '15Days' | '20Days' | '30Days' | 'permanent' = '30Days';
-        if (plan.id === 'plan-15' || plan.durationDays === 15) durationKey = '15Days';
-        else if (plan.id === 'plan-20' || plan.durationDays === 20) durationKey = '20Days';
-        else if (plan.id === 'plan-30' || plan.durationDays === 30) durationKey = '30Days';
-        else if (plan.id === 'plan-perm' || plan.id === 'plan-permanent' || plan.durationDays === -1 || plan.durationDays === 3650) durationKey = 'permanent';
+    let plans: (AdminRuntimePlan & { userPrice: number; hasCustomPrice: boolean; duration: string; durationType?: DurationType })[] = [];
 
-        let userPrice = plan.defaultPrice;
-        let hasCustomPrice = false;
+    if (panelId) {
+      const panelPricing = this.getPanelPricing(panelId);
+      const activeDurations = (panelPricing.durations || []).filter((d) => d.enabled !== false);
 
-        if (panelId) {
-          userPrice = this.getEffectivePrice(targetUserId || '', panelId, durationKey);
-          
-          const custPricing = targetUserId ? (this.state.customerPricing?.[targetUserId] || this.state.customerPricing?.[customer?.id || '']) : null;
-          const specificOverride = custPricing?.[panelId]?.[durationKey];
-          const globalOverride = this.state.panelPricing?.[panelId]?.[durationKey];
-          if ((typeof specificOverride === 'number' && specificOverride > 0) || (typeof globalOverride === 'number' && globalOverride > 0)) {
-            hasCustomPrice = true;
-          }
-        } else {
-          if (customer && typeof customer.price === 'number') {
-            if (plan.id === 'plan-15') userPrice = customer.price;
-            else if (plan.id === 'plan-20') userPrice = Math.round(customer.price * 1.15);
-            else if (plan.id === 'plan-30') userPrice = Math.round(customer.price * 1.25);
-            else if (plan.id === 'plan-perm') userPrice = Math.round(customer.price * 1.8);
-            hasCustomPrice = true;
-          } else if (customPricing) {
-            if (plan.id === 'plan-15' && customPricing.plan15Price !== undefined) {
-              userPrice = customPricing.plan15Price;
-              hasCustomPrice = true;
-            } else if (plan.id === 'plan-20' && customPricing.plan20Price !== undefined) {
-              userPrice = customPricing.plan20Price;
-              hasCustomPrice = true;
-            } else if (plan.id === 'plan-30' && customPricing.plan30Price !== undefined) {
-              userPrice = customPricing.plan30Price;
-              hasCustomPrice = true;
-            } else if (plan.id === 'plan-perm' && customPricing.planPermPrice !== undefined) {
-              userPrice = customPricing.planPermPrice;
-              hasCustomPrice = true;
-            }
-          }
-        }
+      plans = activeDurations.map((d, index) => {
+        const isPerm = d.durationType === 'PERMANENT';
+        const durationIdentifier = isPerm ? 'permanent' : d.durationDays;
+        const effectivePrice = this.getEffectivePrice(targetUserId || '', panelId, durationIdentifier);
+        const hasCustomPrice = effectivePrice !== d.price;
 
         return {
-          ...plan,
-          userPrice,
+          id: d.id || (isPerm ? 'plan-perm' : `plan-${d.durationDays}`),
+          name: isPerm ? 'PERMANENT RUNTIME' : `${d.durationDays} DAYS RUNTIME`,
+          durationDays: (isPerm ? null : (d.durationDays || 30)) as any,
+          durationType: d.durationType,
+          duration: isPerm ? 'Lifetime' : `${d.durationDays} Days`,
+          defaultPrice: d.price,
+          userPrice: effectivePrice,
           hasCustomPrice,
+          status: 'active' as const,
+          badge: isPerm ? 'LIFETIME' : ((d.durationDays || 0) >= 30 ? 'RECOMMENDED' : 'STANDARD'),
+          isPopular: isPerm || (d.durationDays === 30),
+          description: isPerm ? 'Unrestricted non-expiring lifetime panel authorization' : `${d.durationDays} days direct runtime access authorization`,
         };
       });
+    } else {
+      plans = this.state.runtimePlans
+        .filter((p) => p.status === 'active')
+        .map((plan) => {
+          let durationKey: '15Days' | '20Days' | '30Days' | 'permanent' = '30Days';
+          if (plan.id === 'plan-15' || plan.durationDays === 15) durationKey = '15Days';
+          else if (plan.id === 'plan-20' || plan.durationDays === 20) durationKey = '20Days';
+          else if (plan.id === 'plan-30' || plan.durationDays === 30) durationKey = '30Days';
+          else if (plan.id === 'plan-perm' || plan.id === 'plan-permanent' || plan.durationDays === -1 || plan.durationDays === 3650) durationKey = 'permanent';
+
+          return {
+            ...plan,
+            userPrice: plan.defaultPrice,
+            hasCustomPrice: false,
+            duration: plan.durationDays < 0 ? 'Lifetime' : `${plan.durationDays} Days`,
+          };
+        });
+    }
 
     const userLicenses = targetUserId ? this.state.licenses.filter((l) => l.userId === targetUserId || l.username === user?.username) : [];
 
@@ -1707,24 +1840,33 @@ export class AppStore {
     };
   }
 
-  public createOrder(userId: string, moduleId: string, planId: string, customPlan?: { planName: string; finalPrice: number; durationDays: number }): { order: AdminOrder; upiQrImageUrl: string } {
+  public createOrder(
+    userId: string,
+    moduleId: string,
+    planId: string,
+    customPlan?: {
+      planName: string;
+      finalPrice: number;
+      durationDays?: number | null;
+      durationType?: DurationType;
+    }
+  ): { order: AdminOrder; upiQrImageUrl: string } {
     const user = this.state.users.find((u) => u.id === userId || u.username.toUpperCase() === userId.toUpperCase());
     const customer = this.state.customers.find((c) => c.id === userId || c.customer_id.toUpperCase() === userId.toUpperCase() || c.username.toLowerCase() === userId.toLowerCase());
     const mod = this.state.modules.find((m) => m.id === moduleId);
     const plan = this.state.runtimePlans.find((p) => p.id === planId);
 
     const targetUserId = user ? user.id : (customer ? customer.id : userId);
-    
-    let durationKey: '15Days' | '20Days' | '30Days' | 'permanent' = '30Days';
-    if (planId === 'plan-15' || plan?.durationDays === 15) durationKey = '15Days';
-    else if (planId === 'plan-20' || plan?.durationDays === 20) durationKey = '20Days';
-    else if (planId === 'plan-30' || plan?.durationDays === 30) durationKey = '30Days';
-    else if (planId === 'plan-perm' || planId === 'plan-permanent' || plan?.durationDays === -1 || plan?.durationDays === 3650) durationKey = 'permanent';
 
-    const finalPrice = customPlan?.finalPrice ?? this.getEffectivePrice(targetUserId, moduleId, durationKey);
+    const durationType: DurationType = customPlan?.durationType
+      ? customPlan.durationType
+      : (customPlan?.durationDays === null || customPlan?.durationDays === -1 || planId === 'plan-perm' || planId === 'plan-permanent' || plan?.durationDays === -1 ? 'PERMANENT' : 'DAYS');
 
-    const planName = customPlan?.planName ?? plan?.name ?? planId;
-    const durationDays = customPlan?.durationDays ?? plan?.durationDays ?? 30;
+    const durationDays = durationType === 'PERMANENT' ? null : (customPlan?.durationDays ?? plan?.durationDays ?? 30);
+    const durationIdentifier = durationType === 'PERMANENT' ? 'permanent' : durationDays;
+
+    const finalPrice = customPlan?.finalPrice ?? this.getEffectivePrice(targetUserId, moduleId, durationIdentifier);
+    const planName = customPlan?.planName ?? (durationType === 'PERMANENT' ? 'PERMANENT RUNTIME' : `${durationDays} DAYS RUNTIME`);
 
     const orderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
     const newOrder: AdminOrder = {
@@ -1735,7 +1877,7 @@ export class AppStore {
       moduleName: mod ? mod.name : moduleId,
       planId,
       planName,
-      durationDays,
+      durationDays: (durationDays ?? -1) as any,
       finalPrice,
       paymentStatus: 'PENDING',
       transactionRef: 'UPI-TXN-' + Math.floor(1000000000 + Math.random() * 9000000000),
@@ -1744,16 +1886,14 @@ export class AppStore {
       updatedAt: new Date().toISOString(),
     };
 
-    // Find QR Config by finalPrice
+    // Find QR Config by exact price first, or panel + duration key
     let matchedQr = null;
     if (this.state.qrConfigs) {
-      matchedQr = this.state.qrConfigs.find(
-        (q) => q.enabled && q.price === finalPrice
-      );
-    }
-    
-    if (!matchedQr) {
-      // Don't throw, just pass empty so the UI can show "QR NOT CONFIGURED"
+      matchedQr = this.state.qrConfigs.find((q) => q.enabled && q.price === finalPrice);
+      if (!matchedQr) {
+        const durKey = durationType === 'PERMANENT' ? 'permanent' : `${durationDays}Days`;
+        matchedQr = this.state.qrConfigs.find((q) => q.enabled && q.panelId === moduleId && q.duration === durKey);
+      }
     }
 
     this.state.orders.unshift(newOrder);
@@ -1761,7 +1901,7 @@ export class AppStore {
 
     return {
       order: newOrder,
-      upiQrImageUrl: matchedQr ? matchedQr.qrImageUrl : '',
+      upiQrImageUrl: matchedQr ? matchedQr.qrImageUrl : (this.state.settings?.upiQrImageUrl || ''),
     };
   }
 
@@ -2647,8 +2787,10 @@ export class AppStore {
     orderId: string,
     customerId?: string,
     panelId?: string,
-    durationDays?: number,
-    durationName?: string
+    durationDays?: number | null,
+    durationName?: string,
+    durationType?: DurationType,
+    price?: number
   ): GeneratedKeyRecord {
     if (!this.state.generatedKeys) {
       this.state.generatedKeys = [];
@@ -2669,15 +2811,25 @@ export class AppStore {
       (c) => c.id === targetCustomerId || c.customer_id === targetCustomerId || c.username?.toLowerCase() === targetCustomerId.toLowerCase()
     );
     const targetUsername = customer ? customer.username : (order?.username || 'Operator');
-    const targetDays = typeof durationDays === 'number' ? durationDays : (order?.durationDays || 30);
-    const targetDurationName = durationName || order?.planName || (targetDays <= 0 ? 'Lifetime' : `${targetDays} Days`);
+
+    const isPerm =
+      durationType === 'PERMANENT' ||
+      durationDays === null ||
+      durationDays === -1 ||
+      durationDays === 3650 ||
+      order?.durationDays === -1 ||
+      order?.durationDays === null;
+
+    const finalDurationType: DurationType = isPerm ? 'PERMANENT' : 'DAYS';
+    const targetDays: number | null = isPerm ? null : (typeof durationDays === 'number' ? durationDays : (order?.durationDays && order.durationDays > 0 ? order.durationDays : 30));
+    const targetDurationName = durationName || order?.planName || (isPerm ? 'Lifetime' : `${targetDays} Days`);
 
     // 3. Generate brand new, unique panel access credentials (NEVER user/admin login account credentials)
     const generatedId = this.generateRandomPanelAccessId();
     const generatedPassword = this.generateRandomPanelAccessPassword();
 
     const now = new Date();
-    const expiresAt = targetDays <= 0 ? null : new Date(now.getTime() + targetDays * 86400000).toISOString();
+    const expiresAt = isPerm ? null : new Date(now.getTime() + (targetDays || 30) * 86400000).toISOString();
 
     const recordId = 'CRED-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
 
@@ -2694,6 +2846,8 @@ export class AppStore {
       generatedPassword,
       duration: targetDurationName,
       durationDays: targetDays,
+      durationType: finalDurationType,
+      price: price ?? order?.finalPrice ?? 0,
       credentials: {
         id: generatedId,
         password: generatedPassword,
@@ -3036,13 +3190,58 @@ export class AppStore {
   }
 
   public hasValidKeyForPanel(userId?: string, panelId?: string): boolean {
-    if (!this.state.generatedKeys || !panelId) return false;
+    if (!panelId || !userId) return false;
+    const uClean = userId.trim().toLowerCase();
+
+    // 1. Check generatedKeys collection
     const keys = this.getGeneratedKeys(userId, panelId);
-    return keys.some((k) => {
+    const hasActiveGeneratedKey = keys.some((k) => {
       if (k.status !== 'active') return false;
       if (k.expiresAt && new Date(k.expiresAt) < new Date()) return false;
       return true;
     });
+    if (hasActiveGeneratedKey) return true;
+
+    // 2. Check customer permissions
+    const cust = this.state.customers?.find(
+      (c) =>
+        c.id?.trim().toLowerCase() === uClean ||
+        (c.customer_id && c.customer_id.trim().toLowerCase() === uClean) ||
+        (c.username && c.username.trim().toLowerCase() === uClean)
+    );
+    if (cust && cust.panel_permissions && cust.panel_permissions[panelId]) {
+      const perm = cust.panel_permissions[panelId];
+      if (perm.setup_access === true || perm.verify_access === true || (perm.purchased === true && perm.payment_status === 'approved')) {
+        return true;
+      }
+    }
+
+    // 3. Check active licenses
+    if (this.state.licenses) {
+      const hasLic = this.state.licenses.some((lic) => {
+        if (lic.moduleId !== panelId || lic.status !== 'active') return false;
+        const licUserClean = (lic.userId || '').trim().toLowerCase();
+        const licNameClean = (lic.username || '').trim().toLowerCase();
+        const matchesUser = licUserClean === uClean || licNameClean === uClean;
+        if (!matchesUser && cust) {
+          const custIdClean = (cust.id || '').trim().toLowerCase();
+          const custCustIdClean = (cust.customer_id || '').trim().toLowerCase();
+          const custNameClean = (cust.username || '').trim().toLowerCase();
+          if (licUserClean === custIdClean || licUserClean === custCustIdClean || licNameClean === custNameClean) {
+            if (lic.expiresAt && new Date(lic.expiresAt) < new Date()) return false;
+            return true;
+          }
+        }
+        if (matchesUser) {
+          if (lic.expiresAt && new Date(lic.expiresAt) < new Date()) return false;
+          return true;
+        }
+        return false;
+      });
+      if (hasLic) return true;
+    }
+
+    return false;
   }
 
   public getGeneratedKeys(userId?: string, panelId?: string): GeneratedKeyRecord[] {

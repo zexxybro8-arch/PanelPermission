@@ -306,18 +306,34 @@ export interface UserVerificationFee {
   updatedAt: string;
 }
 
+export type DurationType = 'DAYS' | 'PERMANENT';
+
+export interface PanelDurationPricing {
+  id?: string;
+  durationType: DurationType;
+  durationDays: number | null; // e.g. 7, 45, or null for PERMANENT
+  price: number;
+  enabled: boolean;
+  label?: string; // e.g. "7 Days", "Permanent"
+}
+
 export interface PanelPricing {
-  "15Days": number;
-  "20Days": number;
-  "30Days": number;
-  "permanent": number;
+  panelId?: string;
+  durations?: PanelDurationPricing[];
+  "15Days"?: number;
+  "20Days"?: number;
+  "30Days"?: number;
+  "permanent"?: number;
+  [key: string]: any;
 }
 
 export type CustomerPricing = Record<string, {
-  "15Days": number | null;
-  "20Days": number | null;
-  "30Days": number | null;
-  "permanent": number | null;
+  durations?: Record<string, number | null>;
+  "15Days"?: number | null;
+  "20Days"?: number | null;
+  "30Days"?: number | null;
+  "permanent"?: number | null;
+  [key: string]: any;
 }>;
 
 
@@ -327,7 +343,7 @@ export type CustomerPricing = Record<string, {
 export interface QrConfig {
   id: string; // unique ID
   panelId: string;
-  duration: '15Days' | '20Days' | '30Days' | 'permanent';
+  duration: string; // dynamic duration key e.g. '15Days', '7Days', 'permanent', etc.
   customerId?: string; // Optional: If specific to a customer
   price?: number;
   qrImageUrl: string;
@@ -355,7 +371,9 @@ export interface GeneratedKeyRecord {
   generatedId: string; // Unique generated panel ID (e.g. AG-7K4P9X2M)
   generatedPassword: string; // Unique generated panel password (e.g. Q8N4-LP7Z-2X)
   duration: string;
-  durationDays: number;
+  durationDays: number | null;
+  durationType?: DurationType;
+  price?: number;
   credentials: GeneratedKeyCredentials;
   createdAt: string;
   expiresAt: string | null;

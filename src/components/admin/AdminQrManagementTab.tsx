@@ -44,14 +44,27 @@ export const AdminQrManagementTab: React.FC = () => {
 
   const getGlobalPrice = (panelId?: string, duration?: string): number | null => {
     if (!panelId || !duration) return null;
-    const globalPricing = storeState.panelPricing?.[panelId];
-    if (globalPricing) {
-      const price = globalPricing[duration as '15Days' | '20Days' | '30Days' | 'permanent'];
-      if (typeof price === 'number' && price > 0) {
-        return price;
+    const pricing = appStore.getPanelPricing(panelId);
+    if (pricing && pricing.durations) {
+      if (duration === 'permanent' || duration === 'PERMANENT') {
+        const perm = pricing.durations.find(d => d.durationType === 'PERMANENT');
+        if (perm && typeof perm.price === 'number') return perm.price;
       }
+      const days = parseInt(duration.replace(/\D/g, ''), 10);
+      if (!isNaN(days) && days > 0) {
+        const match = pricing.durations.find(d => d.durationType === 'DAYS' && d.durationDays === days);
+        if (match && typeof match.price === 'number') return match.price;
+      }
+      const direct = pricing.durations.find(d => d.id === duration || d.label === duration);
+      if (direct && typeof direct.price === 'number') return direct.price;
     }
-    return null;
+    return appStore.getEffectivePrice('', panelId, duration);
+  };
+
+  const getPanelDurations = (panelId?: string) => {
+    if (!panelId) return [];
+    const pricing = appStore.getPanelPricing(panelId);
+    return pricing.durations || [];
   };
 
   useEffect(() => {
@@ -719,10 +732,23 @@ export const AdminQrManagementTab: React.FC = () => {
                     required
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-violet-500 outline-none cursor-pointer"
                   >
-                    <option value="15Days">15 Days</option>
-                    <option value="20Days">20 Days</option>
-                    <option value="30Days">30 Days</option>
-                    <option value="permanent">Permanent (Lifetime)</option>
+                    {getPanelDurations(editingConfig.panelId).length > 0 ? (
+                      getPanelDurations(editingConfig.panelId).map(d => {
+                        const key = d.durationType === 'PERMANENT' ? 'permanent' : `${d.durationDays}Days`;
+                        return (
+                          <option key={d.id} value={key}>
+                            {d.label || (d.durationType === 'PERMANENT' ? 'Permanent (Lifetime)' : `${d.durationDays} Days`)} {d.price ? `(₹${d.price})` : ''}
+                          </option>
+                        );
+                      })
+                    ) : (
+                      <>
+                        <option value="15Days">15 Days</option>
+                        <option value="20Days">20 Days</option>
+                        <option value="30Days">30 Days</option>
+                        <option value="permanent">Permanent (Lifetime)</option>
+                      </>
+                    )}
                   </select>
                 </div>
 

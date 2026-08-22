@@ -105,7 +105,7 @@ export const PanelSetupView: React.FC<PanelSetupViewProps> = ({
     }));
   };
 
-  const adminSetupEnabled = (appStore.state.settings?.showFilesSetupGuide !== false) && setupEnabled;
+  const adminSetupEnabled = panel.setupEnabled !== false && setupEnabled && (setupData ? setupData.enabled !== false : true);
   const setupAccessGranted = adminSetupEnabled && hasKey;
 
   const embedVideoUrl = formatVideoEmbedUrl(setupData?.videoUrl);

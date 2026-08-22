@@ -135,11 +135,21 @@ export const apiClient = {
     return appStore.saveCustomerPricing(customerId, pricing);
   },
 
-  getEffectivePrice(customerId: string, panelId: string, durationKey: '15Days' | '20Days' | '30Days' | 'permanent'): number {
-    return appStore.getEffectivePrice(customerId, panelId, durationKey);
+  getEffectivePrice(customerId: string, panelId: string, durationIdentifier: string | number | null): number {
+    return appStore.getEffectivePrice(customerId, panelId, durationIdentifier);
   },
 
-  async createOrder(userId: string, moduleId: string, planId: string, customPlan?: { planName: string; finalPrice: number; durationDays: number }): Promise<{ order: AdminOrder; upiQrImageUrl: string }> {
+  async createOrder(
+    userId: string, 
+    moduleId: string, 
+    planId: string, 
+    customPlan?: { 
+      planName: string; 
+      finalPrice: number; 
+      durationDays?: number | null; 
+      durationType?: 'DAYS' | 'PERMANENT'; 
+    }
+  ): Promise<{ order: AdminOrder; upiQrImageUrl: string }> {
     return appStore.createOrder(userId, moduleId, planId, customPlan);
   },
 
@@ -372,10 +382,12 @@ export const apiClient = {
     orderId: string,
     customerId?: string,
     panelId?: string,
-    durationDays?: number,
-    durationName?: string
+    durationDays?: number | null,
+    durationName?: string,
+    durationType?: 'DAYS' | 'PERMANENT',
+    price?: number
   ): Promise<GeneratedKeyRecord> {
-    return appStore.generateKeyForOrder(orderId, customerId, panelId, durationDays, durationName);
+    return appStore.generateKeyForOrder(orderId, customerId, panelId, durationDays, durationName, durationType, price);
   },
 
   async verifyKey(keyInput: string, panelId?: string): Promise<VerifyKeyResult> {

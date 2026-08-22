@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  DollarSign, User, ShieldAlert, Check, RefreshCw, 
-  RotateCcw, Sparkles, AlertCircle, ArrowRight, Tag,
-  Search, Edit3, X, Sliders, ChevronDown, Shield, Boxes
+  DollarSign, Search, Check, AlertCircle, Edit3, X, 
+  ChevronDown, RefreshCw, UserCheck, Shield, Sparkles, Layers, Boxes, Plus, Trash2, User, RotateCcw, Tag
 } from 'lucide-react';
-import { AdminUser, UserCustomPricing, AdminRuntimePlan, Customer, CyberModule, PanelPricing, CustomerPricing } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { CyberModule, Customer, AdminRuntimePlan, AdminUser, UserCustomPricing, PanelDurationPricing } from '../../types';
 import { extractErrorMessage } from '../../utils/errorMessage';
 import { appStore } from '../../store/appStore';
+import { AdminPanelPricingModal } from './AdminPanelPricingModal';
 
 interface AdminUserPricingTabProps {
   users: AdminUser[];
@@ -36,25 +36,16 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
   const [customerSearch, setCustomerSearch] = useState('');
 
   // ----------------------------------------------------
-  // SUB-TAB 1: PANEL DEFAULT PRICING STATES
+  // SUB-TAB 1: PANEL PRICING MODAL
   // ----------------------------------------------------
   const [editingPanel, setEditingPanel] = useState<CyberModule | null>(null);
-  const [panelP15, setPanelP15] = useState<number>(120);
-  const [panelP20, setPanelP20] = useState<number>(138);
-  const [panelP30, setPanelP30] = useState<number>(150);
-  const [panelPPerm, setPanelPPerm] = useState<number>(216);
 
   // ----------------------------------------------------
   // SUB-TAB 2: CUSTOMER CUSTOM PRICING STATES
   // ----------------------------------------------------
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedPanelId, setSelectedPanelId] = useState<string>('');
-  
-  // Custom inputs (empty string means default/null)
-  const [custP15, setCustP15] = useState<string>('');
-  const [custP20, setCustP20] = useState<string>('');
-  const [custP30, setCustP30] = useState<string>('');
-  const [custPPerm, setCustPPerm] = useState<string>('');
+  const [custDurationOverrides, setCustDurationOverrides] = useState<Record<string, string>>({});
 
   // ----------------------------------------------------
   // SUB-TAB 3: ORIGINAL OPERATOR PRICING STATES
@@ -134,69 +125,29 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
   useEffect(() => {
     if (selectedCustomerId && selectedPanelId) {
       const savedOverrides = appStore.state.customerPricing?.[selectedCustomerId]?.[selectedPanelId];
+      const newInputs: Record<string, string> = {};
       if (savedOverrides) {
-        setCustP15(savedOverrides['15Days'] !== undefined && savedOverrides['15Days'] !== null ? String(savedOverrides['15Days']) : '');
-        setCustP20(savedOverrides['20Days'] !== undefined && savedOverrides['20Days'] !== null ? String(savedOverrides['20Days']) : '');
-        setCustP30(savedOverrides['30Days'] !== undefined && savedOverrides['30Days'] !== null ? String(savedOverrides['30Days']) : '');
-        setCustPPerm(savedOverrides['permanent'] !== undefined && savedOverrides['permanent'] !== null ? String(savedOverrides['permanent']) : '');
-      } else {
-        setCustP15('');
-        setCustP20('');
-        setCustP30('');
-        setCustPPerm('');
+        if (savedOverrides.durations) {
+          Object.keys(savedOverrides.durations).forEach((key) => {
+            const val = savedOverrides.durations?.[key];
+            if (val !== undefined && val !== null) {
+              newInputs[key] = String(val);
+            }
+          });
+        }
+        // Legacy keys
+        if (savedOverrides['15Days']) newInputs['dur_15'] = String(savedOverrides['15Days']);
+        if (savedOverrides['20Days']) newInputs['dur_20'] = String(savedOverrides['20Days']);
+        if (savedOverrides['30Days']) newInputs['dur_30'] = String(savedOverrides['30Days']);
+        if (savedOverrides['permanent']) newInputs['dur_perm'] = String(savedOverrides['permanent']);
       }
+      setCustDurationOverrides(newInputs);
     }
   }, [selectedCustomerId, selectedPanelId]);
 
-  // Handle Editing Panel Pricing Modal opening
-  const handleStartEditPanel = (mod: CyberModule) => {
-    setEditingPanel(mod);
-    const saved = appStore.state.panelPricing?.[mod.id];
-    const base = mod.price || 120;
-    if (saved) {
-      setPanelP15(saved['15Days'] || base);
-      setPanelP20(saved['20Days'] || Math.round(base * 1.15));
-      setPanelP30(saved['30Days'] || Math.round(base * 1.25));
-      setPanelPPerm(saved['permanent'] || Math.round(base * 1.8));
-    } else {
-      setPanelP15(base);
-      setPanelP20(Math.round(base * 1.15));
-      setPanelP30(Math.round(base * 1.25));
-      setPanelPPerm(Math.round(base * 1.8));
-    }
-  };
-
-  const handleSavePanelPricing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPanel) return;
-    setSaving(true);
-    setMessage(null);
-    try {
-      await apiClient.savePanelPricing(editingPanel.id, {
-        '15Days': Number(panelP15),
-        '20Days': Number(panelP20),
-        '30Days': Number(panelP30),
-        'permanent': Number(panelPPerm),
-      });
-      setMessage({ type: 'success', text: `Saved pricing template for panel ${editingPanel.name} successfully!` });
-      setEditingPanel(null);
-      await loadAllData();
-      if (onPricingUpdated) onPricingUpdated();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: extractErrorMessage(err, 'Failed to save panel default pricing') });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleResetPanelToDefault = () => {
-    if (!editingPanel) return;
-    const base = editingPanel.price || 120;
-    setPanelP15(base);
-    setPanelP20(Math.round(base * 1.15));
-    setPanelP30(Math.round(base * 1.25));
-    setPanelPPerm(Math.round(base * 1.8));
-  };
+  // Get active panel durations
+  const activePanelPricing = selectedPanelId ? appStore.getPanelPricing(selectedPanelId) : null;
+  const activePanelDurations: PanelDurationPricing[] = activePanelPricing?.durations || [];
 
   // Handle Saving Customer-Specific Overrides
   const handleSaveCustomerPricing = async (e: React.FormEvent) => {
@@ -206,14 +157,33 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
     setMessage(null);
     try {
       const currentOverrides = appStore.state.customerPricing?.[selectedCustomerId] || {};
+      const durationRecord: Record<string, number> = {};
+
+      activePanelDurations.forEach((d) => {
+        const inputVal = custDurationOverrides[d.id];
+        if (inputVal !== undefined && inputVal.trim() !== '') {
+          const num = Number(inputVal);
+          if (!isNaN(num) && num > 0) {
+            durationRecord[d.id] = num;
+            if (d.durationType === 'PERMANENT') {
+              durationRecord['permanent'] = num;
+            } else if (d.durationDays) {
+              durationRecord[`dur_${d.durationDays}`] = num;
+              durationRecord[`${d.durationDays}Days`] = num;
+            }
+          }
+        }
+      });
+
       const updatedOverrides = {
         ...currentOverrides,
         [selectedPanelId]: {
-          '15Days': custP15 !== '' ? Number(custP15) : null,
-          '20Days': custP20 !== '' ? Number(custP20) : null,
-          '30Days': custP30 !== '' ? Number(custP30) : null,
-          'permanent': custPPerm !== '' ? Number(custPPerm) : null,
-        }
+          durations: durationRecord,
+          '15Days': durationRecord['dur_15'] || durationRecord['15Days'] || null,
+          '20Days': durationRecord['dur_20'] || durationRecord['20Days'] || null,
+          '30Days': durationRecord['dur_30'] || durationRecord['30Days'] || null,
+          'permanent': durationRecord['dur_perm'] || durationRecord['permanent'] || null,
+        },
       };
 
       await apiClient.saveCustomerPricing(selectedCustomerId, updatedOverrides);
@@ -237,10 +207,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
       delete updatedOverrides[selectedPanelId];
 
       await apiClient.saveCustomerPricing(selectedCustomerId, updatedOverrides);
-      setCustP15('');
-      setCustP20('');
-      setCustP30('');
-      setCustPPerm('');
+      setCustDurationOverrides({});
       setMessage({ type: 'success', text: 'Overrides cleared. Restored back to panel pricing.' });
       await loadAllData();
       if (onPricingUpdated) onPricingUpdated();
@@ -302,36 +269,17 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
   };
 
   // Filtering Lists
-  const filteredPanels = modules.filter(m => 
-    m.name.toLowerCase().includes(panelSearch.toLowerCase()) ||
-    m.id.toLowerCase().includes(panelSearch.toLowerCase())
+  const filteredPanels = modules.filter(
+    (m) =>
+      m.name.toLowerCase().includes(panelSearch.toLowerCase()) ||
+      m.id.toLowerCase().includes(panelSearch.toLowerCase())
   );
 
-  const filteredOperators = users.filter(u =>
-    u.username.toLowerCase().includes(operatorSearch.toLowerCase()) ||
-    u.id.toLowerCase().includes(operatorSearch.toLowerCase())
+  const filteredOperators = users.filter(
+    (u) =>
+      u.username.toLowerCase().includes(operatorSearch.toLowerCase()) ||
+      u.id.toLowerCase().includes(operatorSearch.toLowerCase())
   );
-
-  // Selected details resolver
-  const selectedCustomerObj = customers.find(c => c.id === selectedCustomerId);
-  const selectedPanelObj = modules.find(m => m.id === selectedPanelId);
-
-  // Resolve defaults for placeholders in customer tab
-  const getPanelBaseAndDefaults = (pId: string) => {
-    const mod = modules.find(m => m.id === pId);
-    if (!mod) return { base: 120, d15: 120, d20: 138, d30: 150, dPerm: 216 };
-    const base = mod.price || 120;
-    const globalPricing = appStore.state.panelPricing?.[mod.id] || {};
-    return {
-      base,
-      d15: globalPricing['15Days'] || base,
-      d20: globalPricing['20Days'] || Math.round(base * 1.15),
-      d30: globalPricing['30Days'] || Math.round(base * 1.25),
-      dPerm: globalPricing['permanent'] || Math.round(base * 1.8),
-    };
-  };
-
-  const currentDefaults = getPanelBaseAndDefaults(selectedPanelId);
 
   return (
     <div className="space-y-6">
@@ -347,11 +295,11 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                 PRICING MANAGEMENT CONSOLE
               </h2>
               <span className="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold bg-violet-950 text-violet-300 border border-violet-500/50">
-                SYSTEM TIER-5 OVERRIDES
+                CUSTOM DURATION SCHEMES
               </span>
             </div>
             <p className="text-xs font-mono-code text-slate-300 mt-0.5">
-              Configure baseline pricing per panel/module, customized rates for specific customers, or operator rates. High priority rule: Custom Customer Overrides &gt; Panel Default Pricing &gt; Base Scale.
+              Control flexible duration packages per panel (add custom days, edit rates, toggle permanent access) and configure custom rates for individual customers.
             </p>
           </div>
         </div>
@@ -410,7 +358,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* SUB-TAB 1: PANEL PRICING TABLE                           */}
+      {/* SUB-TAB 1: PANEL PRICING DIRECTORY                       */}
       {/* ======================================================== */}
       {activeSubTab === 'panel' && (
         <div className="p-6 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4">
@@ -420,7 +368,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                 GLOBAL MODULE PRICING DIRECTORY
               </h3>
               <p className="text-xs font-mono-code text-slate-400">
-                Configure standard price templates for all runtime access durations of active panels.
+                Configure customized durations and prices for each individual panel independently.
               </p>
             </div>
 
@@ -443,24 +391,17 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
               <thead className="bg-slate-900/80 border-b border-slate-850 text-slate-400">
                 <tr>
                   <th className="p-4">Panel Node</th>
-                  <th className="p-4 text-right">15 Days</th>
-                  <th className="p-4 text-right">20 Days</th>
-                  <th className="p-4 text-right">30 Days</th>
-                  <th className="p-4 text-right">Permanent</th>
-                  <th className="p-4 text-center">Status</th>
+                  <th className="p-4">Configured Durations & Rates</th>
+                  <th className="p-4 text-center">Permanent Access</th>
+                  <th className="p-4 text-center">Active Packages</th>
                   <th className="p-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-850 text-slate-300">
                 {filteredPanels.map((mod) => {
-                  const pricing = appStore.state.panelPricing?.[mod.id];
-                  const hasCustom = !!pricing;
-                  
-                  const base = mod.price || 120;
-                  const v15 = pricing?.['15Days'] || base;
-                  const v20 = pricing?.['20Days'] || Math.round(base * 1.15);
-                  const v30 = pricing?.['30Days'] || Math.round(base * 1.25);
-                  const vPerm = pricing?.['permanent'] || Math.round(base * 1.8);
+                  const pricing = appStore.getPanelPricing(mod.id);
+                  const durations = (pricing.durations || []).filter((d) => d.enabled !== false);
+                  const permDuration = (pricing.durations || []).find((d) => d.durationType === 'PERMANENT' && d.enabled !== false);
 
                   return (
                     <tr key={mod.id} className="hover:bg-slate-900/30">
@@ -471,32 +412,57 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                           </div>
                           <div>
                             <span className="font-bold text-white block text-xs">{mod.name}</span>
-                            <span className="text-[10px] text-slate-500">{mod.id} • Base: ₹{base}</span>
+                            <span className="text-[10px] text-slate-500">{mod.id} • Base: ₹{mod.price || 120}</span>
                           </div>
                         </div>
                       </td>
-                      <td className="p-4 text-right font-bold text-violet-300">₹{v15}</td>
-                      <td className="p-4 text-right font-bold text-violet-300">₹{v20}</td>
-                      <td className="p-4 text-right font-bold text-violet-300">₹{v30}</td>
-                      <td className="p-4 text-right font-bold text-amber-300">₹{vPerm}</td>
+
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-1.5 max-w-md">
+                          {durations.length === 0 ? (
+                            <span className="text-slate-500 text-[10px] italic">No active durations configured</span>
+                          ) : (
+                            durations.map((d) => (
+                              <span
+                                key={d.id}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-bold border ${
+                                  d.durationType === 'PERMANENT'
+                                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                                    : 'bg-violet-500/15 border-violet-500/30 text-violet-300'
+                                }`}
+                              >
+                                {d.label || (d.durationType === 'PERMANENT' ? 'Permanent' : `${d.durationDays} Days`)}: ₹{d.price}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </td>
+
                       <td className="p-4 text-center">
-                        {hasCustom ? (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-500/10 border border-violet-500/30 text-violet-300">
-                            CUSTOM
+                        {permDuration ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                            AVAILABLE (₹{permDuration.price})
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] bg-slate-900 border border-slate-800 text-slate-500">
-                            DEFAULT
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-900 border border-slate-800 text-slate-500">
+                            DISABLED
                           </span>
                         )}
                       </td>
+
+                      <td className="p-4 text-center">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-300">
+                          {durations.length} {durations.length === 1 ? 'PACKAGE' : 'PACKAGES'}
+                        </span>
+                      </td>
+
                       <td className="p-4 text-center">
                         <button
-                          onClick={() => handleStartEditPanel(mod)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] text-violet-400 hover:text-violet-300 font-bold flex items-center justify-center gap-1.5 mx-auto transition-transform"
+                          onClick={() => setEditingPanel(mod)}
+                          className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-violet-950/60 border border-slate-800 hover:border-violet-500/50 text-[10px] text-violet-300 hover:text-white font-bold flex items-center justify-center gap-1.5 mx-auto transition-all cursor-pointer"
                         >
                           <Edit3 className="w-3 h-3" />
-                          <span>EDIT</span>
+                          <span>CONFIGURE</span>
                         </button>
                       </td>
                     </tr>
@@ -504,7 +470,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                 })}
                 {filteredPanels.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500">
+                    <td colSpan={5} className="p-8 text-center text-slate-500">
                       No modules/panels matching search filter.
                     </td>
                   </tr>
@@ -527,7 +493,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                 CUSTOMER-SPECIFIC RATE MATRIX
               </h3>
               <p className="text-xs font-mono-code text-slate-400">
-                Establish custom price points for individual customers. These prices will supersede global default templates during payment checkout.
+                Establish custom rates for individual customers for the selected panel's configured duration packages.
               </p>
             </div>
 
@@ -543,7 +509,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                     onChange={(e) => setSelectedCustomerId(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono-code text-white appearance-none outline-none focus:border-violet-500"
                   >
-                    {customers.map(c => (
+                    {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.customer_id} ({c.username})
                       </option>
@@ -564,7 +530,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                     onChange={(e) => setSelectedPanelId(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono-code text-white appearance-none outline-none focus:border-violet-500"
                   >
-                    {modules.map(m => (
+                    {modules.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                       </option>
@@ -578,106 +544,60 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
             <div className="border-t border-slate-850 pt-4 space-y-4">
               <div className="flex items-center justify-between pb-1">
                 <span className="text-[10px] font-bold font-mono-code text-slate-400 uppercase tracking-wider block">
-                  3. EDIT OVERRIDE VALUE (Blank implies Global Panel Price)
+                  3. EDIT CUSTOM DURATION OVERRIDES (Blank implies Panel Default Price)
                 </span>
                 <span className="text-[9px] text-slate-500 font-mono-code">
-                  Base Price: ₹{currentDefaults.base}
+                  {activePanelDurations.length} duration packages configured
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {/* 15 Days Override */}
-                <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-850 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono-code text-slate-400">15 DAYS PRICE</span>
-                    {custP15 ? (
-                      <span className="text-[9px] px-1 bg-emerald-500/10 border border-emerald-500/35 text-emerald-400 rounded">CUSTOM</span>
-                    ) : (
-                      <span className="text-[9px] px-1 bg-slate-950 border border-slate-800 text-slate-500 rounded">DEFAULT</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={custP15}
-                      placeholder={String(currentDefaults.d15)}
-                      onChange={(e) => setCustP15(e.target.value)}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
+              {activePanelDurations.length === 0 ? (
+                <div className="p-6 text-center border border-dashed border-slate-800 rounded-2xl text-slate-500 text-xs font-mono-code">
+                  This panel does not have any active duration packages configured yet.
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {activePanelDurations.map((d) => {
+                    const currentVal = custDurationOverrides[d.id] || '';
+                    const isCustom = currentVal.trim() !== '';
 
-                {/* 20 Days Override */}
-                <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-850 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono-code text-slate-400">20 DAYS PRICE</span>
-                    {custP20 ? (
-                      <span className="text-[9px] px-1 bg-emerald-500/10 border border-emerald-500/35 text-emerald-400 rounded">CUSTOM</span>
-                    ) : (
-                      <span className="text-[9px] px-1 bg-slate-950 border border-slate-800 text-slate-500 rounded">DEFAULT</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={custP20}
-                      placeholder={String(currentDefaults.d20)}
-                      onChange={(e) => setCustP20(e.target.value)}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
+                    return (
+                      <div key={d.id} className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-850 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono-code text-slate-400 font-bold">
+                            {d.label || (d.durationType === 'PERMANENT' ? 'Permanent' : `${d.durationDays} Days`)}
+                          </span>
+                          {isCustom ? (
+                            <span className="text-[9px] px-1 bg-emerald-500/10 border border-emerald-500/35 text-emerald-400 rounded font-bold">
+                              CUSTOM
+                            </span>
+                          ) : (
+                            <span className="text-[9px] px-1 bg-slate-950 border border-slate-800 text-slate-500 rounded">
+                              DEFAULT
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={currentVal}
+                            placeholder={String(d.price)}
+                            onChange={(e) =>
+                              setCustDurationOverrides({
+                                ...custDurationOverrides,
+                                [d.id]: e.target.value,
+                              })
+                            }
+                            className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {/* 30 Days Override */}
-                <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-850 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono-code text-slate-400">30 DAYS PRICE</span>
-                    {custP30 ? (
-                      <span className="text-[9px] px-1 bg-emerald-500/10 border border-emerald-500/35 text-emerald-400 rounded">CUSTOM</span>
-                    ) : (
-                      <span className="text-[9px] px-1 bg-slate-950 border border-slate-800 text-slate-500 rounded">DEFAULT</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={custP30}
-                      placeholder={String(currentDefaults.d30)}
-                      onChange={(e) => setCustP30(e.target.value)}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Permanent Override */}
-                <div className="p-3.5 rounded-xl bg-slate-900/50 border border-slate-850 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono-code text-slate-400">PERMANENT PRICE</span>
-                    {custPPerm ? (
-                      <span className="text-[9px] px-1 bg-emerald-500/10 border border-emerald-500/35 text-emerald-400 rounded">CUSTOM</span>
-                    ) : (
-                      <span className="text-[9px] px-1 bg-slate-950 border border-slate-800 text-slate-500 rounded">DEFAULT</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={custPPerm}
-                      placeholder={String(currentDefaults.dPerm)}
-                      onChange={(e) => setCustPPerm(e.target.value)}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-850">
@@ -720,10 +640,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
               {customers.map((cust) => {
                 const overrides = appStore.state.customerPricing?.[cust.id] || {};
                 const keys = Object.keys(overrides);
-                const activeOverridesCount = keys.filter(k => {
-                  const ov = overrides[k];
-                  return ov && (ov['15Days'] || ov['20Days'] || ov['30Days'] || ov['permanent']);
-                }).length;
+                const activeOverridesCount = keys.length;
 
                 if (activeOverridesCount === 0) return null;
 
@@ -735,26 +652,18 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                         <span className="text-[10px] text-slate-500 font-mono-code">{cust.username}</span>
                       </div>
                       <span className="px-2 py-0.5 rounded-full text-[9px] font-mono-code bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-bold">
-                        {activeOverridesCount} OVERRIDES ACTIVE
+                        {activeOverridesCount} {activeOverridesCount === 1 ? 'OVERRIDE' : 'OVERRIDES'} ACTIVE
                       </span>
                     </div>
 
                     <div className="text-[10px] font-mono-code text-slate-400 space-y-1 bg-slate-950/60 p-2 rounded-lg border border-slate-900">
-                      {keys.map(k => {
-                        const ov = overrides[k];
-                        const panel = modules.find(m => m.id === k);
-                        if (!panel || !(ov['15Days'] || ov['20Days'] || ov['30Days'] || ov['permanent'])) return null;
+                      {keys.map((k) => {
+                        const panel = modules.find((m) => m.id === k);
+                        if (!panel) return null;
                         return (
                           <div key={k} className="flex justify-between">
                             <span className="text-violet-300 truncate max-w-[150px] font-bold">{panel.name}:</span>
-                            <span className="text-slate-500">
-                              [
-                              {ov['15Days'] ? `15d: ₹${ov['15Days']}` : ''}
-                              {ov['20Days'] ? ` 20d: ₹${ov['20Days']}` : ''}
-                              {ov['30Days'] ? ` 30d: ₹${ov['30Days']}` : ''}
-                              {ov['permanent'] ? ` perm: ₹${ov['permanent']}` : ''}
-                              ]
-                            </span>
+                            <span className="text-emerald-400 font-bold">Custom Rates Active</span>
                           </div>
                         );
                       })}
@@ -762,22 +671,13 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                   </div>
                 );
               })}
-
-              {customers.every(cust => {
-                const overrides = appStore.state.customerPricing?.[cust.id] || {};
-                return Object.keys(overrides).length === 0;
-              }) && (
-                <div className="text-center py-12 text-slate-500 font-mono-code text-xs">
-                  No custom pricing overrides are currently active in system cache.
-                </div>
-              )}
             </div>
           </div>
         </div>
       )}
 
       {/* ======================================================== */}
-      {/* SUB-TAB 3: ORIGINAL OPERATOR SPECIFIC PRICING            */}
+      {/* SUB-TAB 3: OPERATOR SPECIFIC PRICING                     */}
       {/* ======================================================== */}
       {activeSubTab === 'operator' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -854,11 +754,11 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono-code text-slate-400">CONFIGURING PRICING FOR:</span>
                     <span className="font-display font-extrabold text-lg text-white">
-                      {users.find(u => u.id === selectedOperatorId)?.username || selectedOperatorId || 'N/A'}
+                      {users.find((u) => u.id === selectedOperatorId)?.username || selectedOperatorId || 'N/A'}
                     </span>
                   </div>
                   <p className="text-xs font-mono-code text-slate-400 mt-0.5">
-                    Clearance Level {users.find(u => u.id === selectedOperatorId)?.clearanceLevel || 3}
+                    Clearance Level {users.find((u) => u.id === selectedOperatorId)?.clearanceLevel || 3}
                   </p>
                 </div>
 
@@ -995,7 +895,7 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
                     ) : (
                       <Check className="w-4 h-4 text-slate-950" />
                     )}
-                    <span>SAVE PRICING FOR {users.find(u => u.id === selectedOperatorId)?.username || selectedOperatorId}</span>
+                    <span>SAVE PRICING FOR {users.find((u) => u.id === selectedOperatorId)?.username || selectedOperatorId}</span>
                   </button>
                 </div>
               </form>
@@ -1004,131 +904,17 @@ export const AdminUserPricingTab: React.FC<AdminUserPricingTabProps> = ({
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* EDITING PANEL DEFAULT PRICING DIALOG (MODAL)             */}
-      {/* ======================================================== */}
+      {/* Admin Panel Pricing Modal */}
       {editingPanel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
-          <div className="w-full max-w-lg rounded-2xl border border-violet-500/30 bg-slate-950 p-6 space-y-4 shadow-[0_0_50px_rgba(139,92,246,0.15)] my-auto max-h-[90dvh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-850">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-400">
-                  <Sliders className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-display font-bold text-xs text-white tracking-wider uppercase">
-                    EDIT PANEL DEFAULT PRICES
-                  </h3>
-                  <span className="text-[10px] font-mono-code text-slate-400">
-                    Panel: {editingPanel.name} ({editingPanel.id})
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setEditingPanel(null)} className="text-slate-400 hover:text-white p-1">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSavePanelPricing} className="space-y-4">
-              <p className="text-xs font-mono-code text-slate-400">
-                Define the standard global prices for each rental period of this panel. Leave fields filled to commit overrides to the base scale.
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* 15 Days */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono-code text-slate-500 block">15 DAYS RATE (INR)</label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={panelP15}
-                      onChange={(e) => setPanelP15(Number(e.target.value))}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* 20 Days */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono-code text-slate-500 block">20 DAYS RATE (INR)</label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={panelP20}
-                      onChange={(e) => setPanelP20(Number(e.target.value))}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* 30 Days */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono-code text-slate-500 block">30 DAYS RATE (INR)</label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={panelP30}
-                      onChange={(e) => setPanelP30(Number(e.target.value))}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Permanent */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono-code text-slate-500 block">PERMANENT RATE (INR)</label>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 font-bold">₹</span>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={panelPPerm}
-                      onChange={(e) => setPanelPPerm(Number(e.target.value))}
-                      className="w-full pl-5.5 pr-2 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-right text-xs text-violet-300 font-bold focus:border-violet-500 outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t border-slate-850 gap-3">
-                <button
-                  type="button"
-                  onClick={handleResetPanelToDefault}
-                  className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] text-amber-400 font-bold"
-                >
-                  RESET TO MULTIPLIERS
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingPanel(null)}
-                    className="px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-800 text-[10px] text-slate-400 hover:text-white"
-                  >
-                    CANCEL
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-4.5 py-2 rounded-lg bg-gradient-to-r from-violet-400 to-fuchsia-500 text-slate-950 font-display font-extrabold text-[10px] tracking-wider"
-                  >
-                    {saving ? 'SAVING...' : 'SAVE TEMPLATE'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AdminPanelPricingModal
+          panel={editingPanel}
+          onClose={() => setEditingPanel(null)}
+          onSaved={() => {
+            setEditingPanel(null);
+            loadAllData();
+            if (onPricingUpdated) onPricingUpdated();
+          }}
+        />
       )}
     </div>
   );
