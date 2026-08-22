@@ -70,15 +70,7 @@ export const PanelSetupView: React.FC<PanelSetupViewProps> = ({
       const valid = appStore.hasValidKeyForPanel(userId, panel.id);
       setHasKey(valid);
     };
-    checkKey();
-    const unsubscribe = appStore.subscribe(() => {
-      setShowFilesSetupGuide(!!appStore.state.settings?.showFilesSetupGuide);
-      checkKey();
-    });
-    return () => unsubscribe();
-  }, [user, panel.id]);
 
-  useEffect(() => {
     const loadContent = async () => {
       setLoading(true);
       try {
@@ -94,8 +86,16 @@ export const PanelSetupView: React.FC<PanelSetupViewProps> = ({
       }
     };
 
+    checkKey();
     loadContent();
-  }, [panel.id]);
+
+    const unsubscribe = appStore.subscribe(() => {
+      setShowFilesSetupGuide(!!appStore.state.settings?.showFilesSetupGuide);
+      checkKey();
+      loadContent();
+    });
+    return () => unsubscribe();
+  }, [user, panel.id]);
 
   const toggleStepCompleted = (stepId: string) => {
     cyberAudio.playClick(1100);

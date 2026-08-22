@@ -8,6 +8,7 @@ export interface PanelDownloadFile {
   description?: string;
   version?: string;
   fileSize?: string;
+  published?: boolean;
   orderIndex?: number;
   createdAt?: string;
   updatedAt?: string;

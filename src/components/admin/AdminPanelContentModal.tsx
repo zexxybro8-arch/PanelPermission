@@ -77,6 +77,7 @@ export const AdminPanelContentModal: React.FC<AdminPanelContentModalProps> = ({
       description: (fileForm.description || '').trim(),
       version: (fileForm.version || '').trim(),
       fileSize: (fileForm.fileSize || '').trim(),
+      published: true,
       orderIndex: editingFileIndex !== null ? editingFileIndex + 1 : files.length + 1,
       createdAt: new Date().toISOString(),
     };

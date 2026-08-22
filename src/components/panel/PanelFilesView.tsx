@@ -38,22 +38,19 @@ export const PanelFilesView: React.FC<PanelFilesViewProps> = ({
       const valid = appStore.hasValidKeyForPanel(userId, panel.id);
       setHasKey(valid);
     };
-    checkKey();
-    const unsubscribe = appStore.subscribe(() => {
-      setShowFilesSetupGuide(!!appStore.state.settings?.showFilesSetupGuide);
-      checkKey();
-    });
-    return () => unsubscribe();
-  }, [user, panel.id]);
 
-  useEffect(() => {
-    // Refresh content from store/API
     const loadContent = async () => {
       setLoading(true);
       try {
         const content = await apiClient.getPanelContent(panel.id);
         if (content) {
-          setFiles(content.files || []);
+          const rawFiles = content.files || [];
+          const filteredFiles = rawFiles.filter((f: any) => {
+            const isPublished = f.published !== false;
+            const matchesPanel = f.panelId ? f.panelId === panel.id : true;
+            return isPublished && matchesPanel;
+          });
+          setFiles(filteredFiles);
           setFilesEnabled(content.filesEnabled !== false);
         }
       } catch (err) {
@@ -63,8 +60,16 @@ export const PanelFilesView: React.FC<PanelFilesViewProps> = ({
       }
     };
 
+    checkKey();
     loadContent();
-  }, [panel.id]);
+
+    const unsubscribe = appStore.subscribe(() => {
+      setShowFilesSetupGuide(!!appStore.state.settings?.showFilesSetupGuide);
+      checkKey();
+      loadContent();
+    });
+    return () => unsubscribe();
+  }, [user, panel.id]);
 
   const handleCopyLink = (url: string, fileId: string) => {
     cyberAudio.playClick(1000);
